@@ -90,6 +90,7 @@ export async function POST(req: Request) {
   }
 
   try {
+    console.log("PROXY calling:", endpoint.url, "authType:", endpoint.authType);
     const resp = await fetch(endpoint.url, {
       method: endpoint.method,
       headers,

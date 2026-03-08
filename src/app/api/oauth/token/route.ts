@@ -104,7 +104,7 @@ export async function POST(req: Request) {
       body: form.toString(),
       cache: "no-store",
     });
-
+    console.log("OAUTH tokenUrl:", body.tokenUrl);
     const text = await resp.text();
     let json: any;
     try {
