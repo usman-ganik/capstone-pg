@@ -12,6 +12,8 @@ export type ApiEndpointConfig = {
   method: HttpMethod;
   url: string;
 
+  sampleCapturedAt?: string; // ISO timestamp
+
   runInStep1?: boolean; // default true
 
   authType: "None" | "API Key" | "OAuth2";
