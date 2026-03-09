@@ -52,7 +52,7 @@ export async function POST(req: Request) {
     }
 
     // Expecting access_token
-    if (!payload?.access_token) {
+    if (!payload?.token) {
       return NextResponse.json(
         { error: "No access_token in response", details: payload },
         { status: 400 }
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({
-      access_token: payload.access_token,
+      access_token: payload.token,
       token_type: payload.token_type ?? "Bearer",
       expires_in: payload.expires_in,
       raw: payload,

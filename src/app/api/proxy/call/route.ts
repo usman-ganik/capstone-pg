@@ -49,7 +49,7 @@ export async function POST(req: Request) {
         );
       }
 
-      const accessToken = tokenJson?.access_token;
+      const accessToken = tokenJson?.token;
       if (!accessToken) {
         return NextResponse.json(
           { error: "OAuth2 token missing access_token", tokenBody: tokenJson ?? tokenText },

@@ -1,18 +1,28 @@
 import { NextResponse } from "next/server";
 
+function getPublicBaseUrl(req: Request) {
+  const proto = req.headers.get("x-forwarded-proto") || "https";
+  const host =
+    req.headers.get("x-forwarded-host") ||
+    req.headers.get("host") ||
+    "localhost:3000";
+
+  return `${proto}://${host}`;
+}
+
 export async function POST(
   req: Request,
   { params }: { params: { slug: string } }
 ) {
   const form = await req.formData();
 
-  // Convert Form Data -> query string
   const q = new URLSearchParams();
   for (const [key, value] of form.entries()) {
     if (typeof value === "string") q.set(key, value);
   }
 
-  // Redirect to the supplier Step 1 page (GET)
-  const url = new URL(`/pay/${params.slug}?${q.toString()}`, req.url);
-  return NextResponse.redirect(url.toString(), 302);
+  const base = getPublicBaseUrl(req);
+  const redirectUrl = new URL(`/pay/${params.slug}?${q.toString()}`, base);
+
+  return NextResponse.redirect(redirectUrl.toString(), 302);
 }
