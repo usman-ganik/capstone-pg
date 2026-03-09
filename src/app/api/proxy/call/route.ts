@@ -75,7 +75,31 @@ export async function POST(req: Request) {
       if (!headers["Content-Type"]) headers["Content-Type"] = "application/json";
     }
 
-    const resp = await fetch(url, fetchInit);
+    let resp: Response;
+try {
+  resp = await fetch(url, fetchInit);
+} catch (e: any) {
+  const cause = e?.cause;
+  return NextResponse.json(
+    {
+      error: "Upstream fetch failed",
+      resolvedUrl: url,
+      message: e?.message,
+      code: e?.code,
+      errno: e?.errno,
+      syscall: e?.syscall,
+      cause: cause
+        ? {
+            message: cause?.message,
+            code: cause?.code,
+            errno: cause?.errno,
+            syscall: cause?.syscall,
+          }
+        : null,
+    },
+    { status: 502 }
+  );
+}
 
     const text = await safeText(resp);
     const json = tryJson(text);
@@ -95,10 +119,24 @@ export async function POST(req: Request) {
 
     // Return JSON if possible else raw text
     return NextResponse.json(json ?? { raw: text });
-  } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message ?? "Proxy call failed" },
-      { status: 500 }
-    );
-  }
+  }  catch (e: any) {
+  const cause = e?.cause;
+  return NextResponse.json(
+    {
+      error: e?.message ?? "Proxy call failed",
+      code: e?.code,
+      errno: e?.errno,
+      syscall: e?.syscall,
+      cause: cause
+        ? {
+            message: cause?.message,
+            code: cause?.code,
+            errno: cause?.errno,
+            syscall: cause?.syscall,
+          }
+        : null,
+    },
+    { status: 500 }
+  );
+}
 }
