@@ -1,122 +1,103 @@
 import { NextResponse } from "next/server";
-import type { ApiEndpointConfig } from "@/lib/types";
 
-type ProxyRequest = {
-  endpoint: ApiEndpointConfig;
-};
+async function safeText(resp: Response) {
+  try {
+    return await resp.text();
+  } catch {
+    return "";
+  }
+}
+
+function tryJson(text: string) {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(req: Request) {
-  const { endpoint } = (await req.json()) as ProxyRequest;
-
-  if (!endpoint?.url || !endpoint?.method) {
-    return NextResponse.json({ error: "endpoint.url and endpoint.method required" }, { status: 400 });
-  }
-
-  // Parse headers JSON
-  let headersFromUi: Record<string, string> = {};
   try {
-    headersFromUi = endpoint.headersJson?.trim() ? JSON.parse(endpoint.headersJson) : {};
-  } catch (e: any) {
-    return NextResponse.json({ error: "Invalid headersJson", message: e?.message }, { status: 400 });
-  }
+    const { endpoint } = await req.json();
 
-  const headers: Record<string, string> = {
-    ...headersFromUi,
-  };
-
-  // Auth handling
-  if (endpoint.authType === "API Key") {
-    if (endpoint.apiKeyHeaderName && endpoint.apiKeyValue) {
-      headers[endpoint.apiKeyHeaderName] = endpoint.apiKeyValue;
-    }
-  }
-
-  if (endpoint.authType === "OAuth2") {
-    // Fetch token via our server route
-    const tokenResp = await fetch(new URL("/api/oauth/token", req.url), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
-      body: JSON.stringify({
-        tokenUrl: endpoint.oauthTokenUrl,
-        grantType: endpoint.oauthGrantType ?? "client_credentials",
-        clientId: endpoint.oauthClientId,
-        clientSecret: endpoint.oauthClientSecret,
-        scope: endpoint.oauthScope,
-        audience: endpoint.oauthAudience,
-        username: endpoint.oauthUsername,
-        password: endpoint.oauthPassword,
-        code: endpoint.oauthCode,
-        redirectUri: endpoint.oauthRedirectUri,
-        refreshToken: endpoint.oauthRefreshToken,
-      }),
-    });
-
-    const tokenJson = await tokenResp.json().catch(() => ({}));
-    if (!tokenResp.ok) {
-      return NextResponse.json(
-        { error: "OAuth2 token failed", details: tokenJson },
-        { status: 400 }
-      );
+    // Parse headers JSON if provided
+    let headers: Record<string, string> = {};
+    if (endpoint.headersJson?.trim()) {
+      headers = JSON.parse(endpoint.headersJson);
     }
 
-    const accessToken = tokenJson.token;
-    const tokenType = tokenJson.token_type ?? "Bearer";
-    if (!accessToken) {
-      return NextResponse.json(
-        { error: "Token response missing access_token", details: tokenJson },
-        { status: 400 }
-      );
-    }
+    // If OAuth2, get token from your oauth route
+    if (endpoint.authType === "OAuth2") {
+      const tokenResp = await fetch(new URL("/api/oauth/token", req.url), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(endpoint),
+      });
 
-    headers["Authorization"] = `${tokenType} ${accessToken}`;
-  }
+      const tokenText = await safeText(tokenResp);
+      const tokenJson = tryJson(tokenText);
 
-  // Request body (only for POST/PUT/PATCH typically)
-  let body: string | undefined = undefined;
-  if (endpoint.method !== "GET") {
-    if (endpoint.requestBodyJson?.trim()) {
-      try {
-        JSON.parse(endpoint.requestBodyJson); // validate JSON
-        body = endpoint.requestBodyJson;
-        headers["Content-Type"] = headers["Content-Type"] ?? "application/json";
-      } catch (e: any) {
+      if (!tokenResp.ok) {
         return NextResponse.json(
-          { error: "Invalid requestBodyJson", message: e?.message },
+          {
+            error: "OAuth2 token failed",
+            tokenStatus: tokenResp.status,
+            tokenBody: tokenJson ?? tokenText,
+          },
           { status: 400 }
         );
       }
-    }
-  }
 
-  try {
-    console.log("PROXY calling:", endpoint.url, "authType:", endpoint.authType);
-    const resp = await fetch(endpoint.url, {
-      method: endpoint.method,
+      const accessToken = tokenJson?.access_token;
+      if (!accessToken) {
+        return NextResponse.json(
+          { error: "OAuth2 token missing access_token", tokenBody: tokenJson ?? tokenText },
+          { status: 400 }
+        );
+      }
+
+      headers["Authorization"] = `Bearer ${accessToken}`;
+    }
+
+    const method = endpoint.method || "GET";
+    const url = endpoint.url;
+
+    const fetchInit: RequestInit = {
+      method,
       headers,
-      body,
-      cache: "no-store",
-    });
+      redirect: "manual",
+    };
 
-    const text = await resp.text();
-    let json: any;
-    try {
-      json = JSON.parse(text);
-    } catch {
-      json = { raw: text };
+    if (method === "POST") {
+      fetchInit.body = endpoint.requestBodyJson ?? "";
+      // If user didn't set content-type, assume JSON
+      if (!headers["Content-Type"]) headers["Content-Type"] = "application/json";
     }
+
+    const resp = await fetch(url, fetchInit);
+
+    const text = await safeText(resp);
+    const json = tryJson(text);
 
     if (!resp.ok) {
       return NextResponse.json(
-        { error: "API call failed", status: resp.status, details: json },
+        {
+          error: "Upstream API error",
+          status: resp.status,
+          resolvedUrl: url,
+          responseHeaders: Object.fromEntries(resp.headers.entries()),
+          body: json ?? text ?? null,
+        },
         { status: 400 }
       );
     }
 
-    return NextResponse.json(json);
+    // Return JSON if possible else raw text
+    return NextResponse.json(json ?? { raw: text });
   } catch (e: any) {
     return NextResponse.json(
-      { error: "API call error", message: e?.message ?? "unknown" },
+      { error: e?.message ?? "Proxy call failed" },
       { status: 500 }
     );
   }
