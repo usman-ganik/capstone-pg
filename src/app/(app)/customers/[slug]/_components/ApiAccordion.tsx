@@ -100,6 +100,8 @@ export default function ApiAccordion({
   endpoints = [],
   onChange,
   onSelectForMapper,
+  customerSlug,
+  phase = "CONFIG_TEST",
   parameterNames = [],
   parameterValues = {},
   onChangeParameterValues,
@@ -108,7 +110,8 @@ export default function ApiAccordion({
   endpoints?: ApiEndpointConfig[];
   onChange: (next: ApiEndpointConfig[]) => void;
   onSelectForMapper: (id: string) => void;
-
+  customerSlug?: string;
+  phase?: string;
   parameterNames?: string[];
   parameterValues?: Record<string, string>;
   onChangeParameterValues?: (v: Record<string, string>) => void;
@@ -160,6 +163,31 @@ export default function ApiAccordion({
   function applyTemplate(input: string, values: Record<string, string>) {
     return (input ?? "").replace(/\{\{(\w+)\}\}/g, (_, k) => values[k] ?? "");
 }
+
+const templateValues = {
+  params: parameterValues,   // { rfxId: "...", accountId: "...", ... }
+
+  // Optional: mock session values for Step 5 testing
+  session: {
+    id: parameterValues.sessionId ?? "test-session",
+    status: parameterValues.paymentStatus ?? "APPROVED",
+    received_number: parameterValues.receivedNumber ?? "RCPT-TEST",
+    amount: parameterValues.amount ?? "100.00",
+    currency: parameterValues.currency ?? "AED",
+  },
+};
+
+function getByDotPath(values: any, path: string) {
+  return path.split(".").reduce((acc, k) => (acc == null ? undefined : acc[k]), values);
+}
+
+function applyTemplateDot(input: string, values: any) {
+  return (input ?? "").replace(/\{\{([\w.]+)\}\}/g, (_, key) => {
+    const v = getByDotPath(values, key);
+    return v == null ? "" : String(v);
+  });
+}
+
   async function testEndpoint(endpoint: ApiEndpointConfig) {
     setTestingId(endpoint.id);
     toast.message(`Testing: ${endpoint.name || "API"}`);
@@ -170,17 +198,23 @@ export default function ApiAccordion({
       if (endpoint.method === "POST" && endpoint.requestBodyJson?.trim())
         JSON.parse(endpoint.requestBodyJson);
       
-      const resolved: ApiEndpointConfig = {
+      const resolved = {
   ...endpoint,
-  url: applyTemplate(endpoint.url, parameterValues),
-  headersJson: applyTemplate(endpoint.headersJson ?? "", parameterValues),
-  requestBodyJson: applyTemplate(endpoint.requestBodyJson ?? "", parameterValues),
+  url: applyTemplateDot(endpoint.url, templateValues),
+  headersJson: applyTemplateDot(endpoint.headersJson ?? "", templateValues),
+  requestBodyJson: applyTemplateDot(endpoint.requestBodyJson ?? "", templateValues),
 };
 
       const resp = await fetch("/api/proxy/call", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ endpoint: resolved }),
+        body: JSON.stringify({
+          endpoint: resolved,
+          meta: {
+            customerSlug,
+            phase,
+          },
+        }),
       });
 
       const ms = Math.round(performance.now() - start);
@@ -265,30 +299,36 @@ setTestingId(null);
             Add endpoints, reorder them, toggle “Run in Step 1”, and test.
           </div>
         </div>
-{onChangeParameterValues && parameterNames.length > 0 && (
-  <div className="sm:col-span-2 space-y-2 rounded-2xl border p-4">
-    <div className="text-sm font-medium">Test values (for templates)</div>
-    <div className="grid gap-3 sm:grid-cols-2">
-      {parameterNames.map((name) => (
-        <div key={name} className="space-y-1">
-          <div className="text-xs text-muted-foreground">{name}</div>
-          <Input
-            value={parameterValues[name] ?? ""}
-            onChange={(e) =>
-              onChangeParameterValues({ ...parameterValues, [name]: e.target.value })
-            }
-            className="rounded-xl"
-          />
-        </div>
-      ))}
-    </div>
-  </div>
-)}
         <Button onClick={addEndpoint} variant="outline" className="rounded-xl">
           + Add API
         </Button>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        {onChangeParameterValues && parameterNames.length > 0 && (
+          <div className="space-y-3 rounded-2xl border bg-muted/20 p-4">
+            <div className="space-y-1">
+              <div className="text-sm font-medium">Test values (for templates)</div>
+              <div className="text-xs text-muted-foreground">
+                These sample values are used when testing template tokens in URL, headers,
+                and request payloads.
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {parameterNames.map((name) => (
+                <div key={name} className="space-y-1">
+                  <div className="text-xs text-muted-foreground">{name}</div>
+                  <Input
+                    value={parameterValues[name] ?? ""}
+                    onChange={(e) =>
+                      onChangeParameterValues({ ...parameterValues, [name]: e.target.value })
+                    }
+                    className="rounded-xl"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}

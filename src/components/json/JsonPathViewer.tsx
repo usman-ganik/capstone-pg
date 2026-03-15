@@ -46,7 +46,6 @@ export default function JsonPathViewer({ jsonText, onJsonPathCopied }: Props) {
     }
     setCopied(path);
     onJsonPathCopied?.(path);
-    setTimeout(() => setCopied(""), 1400);
   }
 
   if (!jsonText?.trim()) {
@@ -93,26 +92,28 @@ export default function JsonPathViewer({ jsonText, onJsonPathCopied }: Props) {
         </div>
       )}
 
-      <div className="rounded-xl border p-3 text-xs">
-        <JSONTree
-          data={parsed}
-          theme={theme as any}
-          invertTheme={false}
-          shouldExpandNodeInitially={(keyPath, data, level) => level < 2}
-          labelRenderer={(keyPath) => {
-            const p = toJsonPath(keyPath as any);
-            return (
-              <button
-                type="button"
-                className="text-left hover:underline"
-                onClick={() => copy(p)}
-                title="Click to copy JSONPath"
-              >
-                {String(keyPath[0])}
-              </button>
-            );
-          }}
-        />
+      <div className="overflow-x-auto rounded-xl border p-3 text-xs">
+        <div className="min-w-max whitespace-nowrap">
+          <JSONTree
+            data={parsed}
+            theme={theme as any}
+            invertTheme={false}
+            shouldExpandNodeInitially={(keyPath, data, level) => level < 2}
+            labelRenderer={(keyPath) => {
+              const p = toJsonPath(keyPath as any);
+              return (
+                <button
+                  type="button"
+                  className="whitespace-nowrap text-left hover:underline"
+                  onClick={() => copy(p)}
+                  title="Click to copy JSONPath"
+                >
+                  {String(keyPath[0])}
+                </button>
+              );
+            }}
+          />
+        </div>
       </div>
 
       <div className="text-xs text-muted-foreground">

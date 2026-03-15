@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Switch } from "@/components/ui/switch";
 
 import JsonPathViewer from "@/components/json/JsonPathViewer";
 
@@ -30,6 +29,7 @@ export type OutputFormat = "-" | "currency" | "date" | "datetime";
 
 export type MappingRow = {
   id: string;
+  key: string;
   label: string;
   jsonPath: string;
   type: OutputType;
@@ -42,6 +42,76 @@ const FORMAT_OPTIONS: OutputFormat[] = ["-", "currency", "date", "datetime"];
 
 function uid() {
   return crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2, 10);
+}
+
+function normalizeKey(label: string) {
+  return (label || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function getValueByJsonPath(obj: any, path: string) {
+  if (!obj || !path) return undefined;
+
+  let p = path.trim();
+  if (p.startsWith("$.")) p = p.slice(2);
+  else if (p.startsWith("$")) p = p.slice(1);
+  if (p && !p.startsWith(".") && !p.startsWith("[")) p = "." + p;
+
+  const tokens: Array<string | number> = [];
+  const re = /(?:\.([A-Za-z_]\w*))|(?:\[(\d+)\])|(?:\["([^"]+)"\])|(?:\['([^']+)'\])/g;
+
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(p)) !== null) {
+    if (match[1] !== undefined) tokens.push(match[1]);
+    else if (match[2] !== undefined) tokens.push(Number(match[2]));
+    else if (match[3] !== undefined) tokens.push(match[3]);
+    else if (match[4] !== undefined) tokens.push(match[4]);
+  }
+
+  let current = obj;
+  for (const token of tokens) {
+    current = current?.[token as any];
+    if (current === undefined) break;
+  }
+
+  return current;
+}
+
+function applyPrefixToJsonPath(currentPath: string, prefixPath: string) {
+  const nextPrefix = prefixPath.trim();
+  const current = currentPath.trim();
+
+  if (!current) return nextPrefix;
+  if (current === "$") return nextPrefix;
+
+  let suffix = current;
+
+  if (current.startsWith("$.params")) {
+    suffix = current.slice("$.params".length);
+  } else {
+    const resultsMatch = current.match(/^\$\.results\[\d+\]/);
+    if (resultsMatch) {
+      suffix = current.slice(resultsMatch[0].length);
+    } else if (current.startsWith("$.root")) {
+      suffix = current.slice("$.root".length);
+    } else if (current.startsWith('$["root"]')) {
+      suffix = current.slice('$["root"]'.length);
+    } else if (current.startsWith("$['root']")) {
+      suffix = current.slice("$['root']".length);
+    } else if (current.startsWith("$.")) {
+      suffix = current.slice(1);
+    } else if (current.startsWith("$[")) {
+      suffix = current.slice(1);
+    } else if (current.startsWith("$")) {
+      suffix = current.slice(1);
+    }
+  }
+
+  if (!suffix) return nextPrefix;
+  if (suffix.startsWith(".") || suffix.startsWith("[")) return `${nextPrefix}${suffix}`;
+  return `${nextPrefix}.${suffix}`;
 }
 
 function SortableRow({
@@ -122,6 +192,14 @@ export default function ResponseMapper({
     rows[0]?.id ?? null
   );
   const [lastCopied, setLastCopied] = React.useState<string>("");
+  const sampleObject = React.useMemo(() => {
+    if (!sampleJson?.trim()) return null;
+    try {
+      return JSON.parse(sampleJson);
+    } catch {
+      return null;
+    }
+  }, [sampleJson]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
@@ -140,6 +218,7 @@ export default function ResponseMapper({
   function addRow() {
     const newRow: MappingRow = {
       id: uid(),
+      key: "",
       label: "",
       jsonPath: "",
       type: "String",
@@ -167,6 +246,18 @@ export default function ResponseMapper({
     onChange(rows.map((r) => (r.id === targetId ? { ...r, jsonPath: path } : r)));
   }
 
+  function applyPrefixToSelectedRow(prefix: string) {
+    const targetId = selectedRowId ?? rows[rows.length - 1]?.id;
+    if (!targetId) return;
+    onChange(
+      rows.map((r) =>
+        r.id === targetId
+          ? { ...r, jsonPath: applyPrefixToJsonPath(r.jsonPath, prefix) }
+          : r
+      )
+    );
+  }
+
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -189,39 +280,15 @@ export default function ResponseMapper({
             ? "Choose fields shown on the status page."
             : "Map API response nodes to UI output fields (JSONPath)."}
         </div>
-      </CardHeader>
-
-      {/* Make the RIGHT panel wider */}
-      <CardContent className="grid gap-4 items-start lg:grid-cols-[1.3fr_2fr]">
         {!isStatusFields && (
-          <div className="w-full min-w-0 rounded-2xl border p-4">
-            <div className="text-sm font-medium">Sample JSON</div>
-            <div className="mt-2 text-xs text-muted-foreground">
-              Click a key to copy JSONPath. It will fill the <b>selected mapping row</b>.
-            </div>
-
-            {rows.length > 0 && (
-              <div className="mt-2 text-xs text-muted-foreground">
-                Selected row:{" "}
-                <span className="font-medium">
-                  #{selectedIndex >= 0 ? selectedIndex + 1 : "-"}
-                </span>
-              </div>
-            )}
-
-            <div className="mt-3">
-              <JsonPathViewer jsonText={sampleJson} onJsonPathCopied={applyPathToSelectedRow} />
-            </div>
-
-            {lastCopied && (
-              <div className="mt-3 rounded-xl border bg-muted px-3 py-2 text-xs">
-                Last copied: <code className="font-mono">{lastCopied}</code>
-              </div>
-            )}
+          <div className="rounded-xl border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            Step 1: click a field in Sample JSON to fill the selected row path.
+            Step 2: use the root buttons if you need to switch that path to Params or a different API result.
           </div>
         )}
+      </CardHeader>
 
-        {/* Output panel (this was missing in your file) */}
+      <CardContent className="space-y-4">
         <div className="w-full min-w-0 self-start rounded-2xl border p-4 space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-sm font-medium">
@@ -229,11 +296,6 @@ export default function ResponseMapper({
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Switch checked={compactMode} onCheckedChange={onCompactModeChange} />
-                <span className="text-sm text-muted-foreground">Compact</span>
-              </div>
-
               {prefixes.length > 0 && (
   <div className="flex flex-wrap gap-2">
     {prefixes.map((p) => (
@@ -243,9 +305,9 @@ export default function ResponseMapper({
         variant="outline"
         size="sm"
         className="rounded-xl"
-        onClick={() => applyPathToSelectedRow(p.path)}
+        onClick={() => applyPrefixToSelectedRow(p.path)}
       >
-        {p.label}
+        {p.label === "Params" ? "Set root: Params" : `Set root: ${p.label}`}
       </Button>
     ))}
   </div>
@@ -262,88 +324,130 @@ export default function ResponseMapper({
               No mapping fields yet. Click <b>+ Add field</b>.
             </div>
           ) : (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext items={rows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-2">
+            <div className="overflow-x-auto rounded-2xl border">
+              <table className="w-full min-w-[900px] border-collapse">
+                <thead>
+                  <tr className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="px-3 py-2">Row</th>
+                    <th className="px-3 py-2">Label</th>
+                    <th className="px-3 py-2">Sample value</th>
+                    <th className="px-3 py-2">JSONPath</th>
+                    <th className="px-3 py-2">Type</th>
+                    <th className="px-3 py-2">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
                   {rows.map((r, idx) => {
                     const selected = r.id === selectedRowId;
 
                     return (
-                      <SortableRow
+                      <tr
                         key={r.id}
-                        id={r.id}
-                        compact={compactMode}
-                        selected={selected}
-                        onSelect={() => setSelectedRowId(r.id)}
+                        className={selected ? "bg-muted/30" : ""}
+                        onClick={() => setSelectedRowId(r.id)}
                       >
-                        <div className="mb-2 flex items-center justify-between gap-2">
-                          <div className="text-xs text-muted-foreground">
-                            Row {idx + 1} {selected ? "• selected" : ""}
+                        <td className="px-3 py-2 align-top text-xs text-muted-foreground">
+                          {idx + 1}
+                        </td>
+                        <td className="px-3 py-2 align-top">
+                          <Input
+                            placeholder="Display label"
+                            className="rounded-xl w-full"
+                            value={r.label}
+                            onChange={(e) => {
+                              const nextLabel = e.target.value;
+                              const patch: Partial<MappingRow> = { label: nextLabel };
+                              if (!r.key?.trim()) patch.key = normalizeKey(nextLabel);
+                              updateRow(r.id, patch);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </td>
+                        <td className="px-3 py-2 align-top">
+                          <div className="rounded-xl border bg-muted/30 px-3 py-2 font-mono text-xs whitespace-nowrap">
+                            {(() => {
+                              const sampleValue = getValueByJsonPath(sampleObject, r.jsonPath);
+                              if (sampleValue == null || sampleValue === "") return "—";
+                              if (typeof sampleValue === "object") return JSON.stringify(sampleValue);
+                              return String(sampleValue);
+                            })()}
                           </div>
-
+                        </td>
+                        <td className="px-3 py-2 align-top">
+                          <Input
+                            placeholder="JSONPath"
+                            className="rounded-xl w-full font-mono text-xs"
+                            value={r.jsonPath}
+                            onChange={(e) => updateRow(r.id, { jsonPath: e.target.value })}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </td>
+                        <td className="px-3 py-2 align-top">
+                          <select
+                            className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                            value={r.type}
+                            onChange={(e) => updateRow(r.id, { type: e.target.value as any })}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {TYPE_OPTIONS.map((t) => (
+                              <option key={t} value={t}>
+                                {t}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-3 py-2 align-top">
                           <Button
                             variant="ghost"
                             size="sm"
                             className="rounded-xl text-red-600 hover:text-red-700"
                             onClick={(e) => {
                               e.stopPropagation();
+                              const shouldDelete = window.confirm(
+                                `Delete mapping row ${idx + 1}${r.label ? ` (${r.label})` : ""}?`
+                              );
+                              if (!shouldDelete) return;
                               deleteRow(r.id);
                             }}
                           >
                             Delete
                           </Button>
-                        </div>
-
-                        <div className={compactMode ? "space-y-1.5" : "space-y-2"}>
-                          <div className="grid gap-2 md:grid-cols-[1fr_1.8fr]">
-                            <Input
-                              placeholder="Display label"
-                              className="rounded-xl w-full"
-                              value={r.label}
-                              onChange={(e) => updateRow(r.id, { label: e.target.value })}
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                            <Input
-                              placeholder="JSONPath"
-                              className="rounded-xl w-full font-mono text-xs"
-                              value={r.jsonPath}
-                              onChange={(e) => updateRow(r.id, { jsonPath: e.target.value })}
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                          </div>
-
-                          <div className="grid gap-2 md:grid-cols-[180px_180px_1fr]">
-                            <select
-                              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
-                              value={r.type}
-                              onChange={(e) => updateRow(r.id, { type: e.target.value as any })}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              {TYPE_OPTIONS.map((t) => (
-                                <option key={t} value={t}>
-                                  {t}
-                                </option>
-                              ))}
-                            </select>
-                            
-                          </div>
-                        </div>
-                      </SortableRow>
+                        </td>
+                      </tr>
                     );
                   })}
-                </div>
-              </SortableContext>
-            </DndContext>
+                </tbody>
+              </table>
+            </div>
           )}
 
           <div className="text-xs text-muted-foreground">
             Tip: click a row to select it, then click a JSON key to fill its JSONPath.
           </div>
         </div>
+
+        {!isStatusFields && (
+          <div className="w-full min-w-0 rounded-2xl border p-4">
+            <div className="text-sm font-medium">Sample JSON</div>
+            <div className="mt-2 text-xs text-muted-foreground">
+              Click a key to replace the JSONPath of the <b>selected mapping row</b>. Then use the root buttons above if you need this path to point to Params or another API result.
+            </div>
+
+            {rows.length > 0 && (
+              <div className="mt-2 text-xs text-muted-foreground">
+                Selected row:{" "}
+                <span className="font-medium">
+                  #{selectedIndex >= 0 ? selectedIndex + 1 : "-"}
+                </span>
+              </div>
+            )}
+
+            <div className="mt-3">
+              <JsonPathViewer jsonText={sampleJson} onJsonPathCopied={applyPathToSelectedRow} />
+            </div>
+
+          </div>
+        )}
       </CardContent>
     </Card>
   );

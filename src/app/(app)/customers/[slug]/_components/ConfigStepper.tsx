@@ -2,6 +2,7 @@
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -15,6 +16,13 @@ import ResponseMapper, { MappingRow } from "./ResponseMapper";
 import { toast } from "sonner";
 
 import {
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+
+import AiDesignerCard from "./AiDesignerCard";
+
+import {
   Accordion,
   AccordionContent,
   AccordionItem,
@@ -22,6 +30,7 @@ import {
 } from "@/components/ui/accordion";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { ApiEndpointConfig } from "@/lib/types";
 import ParameterBuilder, { ParameterRow, seed as parameterSeed } from "./ParameterBuilder";
 type Customer = {
@@ -30,7 +39,74 @@ type Customer = {
   status: "Active" | "Inactive";
 };
 
+type BrandingSettings = {
+  logoDataUrl: string;
+  accentColor: string;
+  footerText: string;
+};
+
+type LocalCustomerRecord = {
+  slug: string;
+  name: string;
+  status: "Active" | "Inactive";
+};
+
+const LOCAL_CUSTOMERS_KEY = "pg-customers";
+
+function normalizeSlug(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function fileToDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function readLocalCustomers(): LocalCustomerRecord[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_CUSTOMERS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function upsertLocalCustomer(customer: LocalCustomerRecord) {
+  const next = readLocalCustomers().filter((entry) => entry.slug !== customer.slug);
+  next.unshift(customer);
+  localStorage.setItem(LOCAL_CUSTOMERS_KEY, JSON.stringify(next));
+}
+
+function getDefaultBranding(): BrandingSettings {
+  return {
+    logoDataUrl: "",
+    accentColor: "",
+    footerText: "",
+  };
+}
+
+async function fetchPublishedConfig(slug: string) {
+  const res = await fetch(`/api/config/${slug}`, { cache: "no-store" });
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.error ?? "Failed to load published config");
+  }
+  return json;
+}
+
 export default function ConfigStepper({ customer }: { customer: Customer }) {
+  const router = useRouter();
+  const isNewCustomer = customer.slug === "new";
   const [parameterRows, setParameterRows] = React.useState<ParameterRow[]>(parameterSeed);
   const [step1Apis, setStep1Apis] = React.useState<ApiEndpointConfig[]>([]);
   const [selectedStep1ApiId, setSelectedStep1ApiId] = React.useState<string | null>(null);
@@ -44,7 +120,12 @@ const [publishInfo, setPublishInfo] = React.useState<{
   supplierUrl: string;
   portalUrl: string;
   publishedAt: string;
+  publishedBy: string;
+  publishHistory: Array<{ publishedAt: string; publishedBy: string }>;
+  apiUsername: string;
+  apiPassword: string | null;
 } | null>(null);
+const [publisherName, setPublisherName] = React.useState<string>("Local user");
 
 const [step5Apis, setStep5Apis] = React.useState<ApiEndpointConfig[]>([]);
 const [selectedStep5ApiId, setSelectedStep5ApiId] = React.useState<string | null>(null);
@@ -68,26 +149,110 @@ const step5Prefixes = React.useMemo(() => {
 
 const [publishing, setPublishing] = React.useState(false);
 
+const [gatewaySettings, setGatewaySettings] = React.useState<any>(() =>
+  ensureGatewayUi({
+    provider: "SIMULATOR",
+    cybersource: { checkoutUrl: "", profileId: "", accessKey: "", secretKey: "" },
+    paytabs: { profileId: "", serverKey: "", region: "" },
+  })
+);
+
+function ensureGatewayUi(gs: any) {
+  const next = gs ? structuredClone(gs) : {};
+  next.provider = next.provider ?? "SIMULATOR";
+  next.cybersource = next.cybersource ?? { checkoutUrl: "", profileId: "", accessKey: "", secretKey: "" };
+  next.paytabs = next.paytabs ?? { profileId: "", serverKey: "", region: "" };
+
+  // ✅ add missing ui
+  next.ui = next.ui ?? {
+    theme: {
+      primary: "#0ea5e9",
+      background: "#ffffff",
+      surface: "#ffffff",
+      text: "#111827",
+      muted: "#6b7280",
+      radius: 16,
+    },
+    extraFields: [],
+  };
+
+  // ensure sub-shapes
+  next.ui.theme = next.ui.theme ?? {
+    primary: "#0ea5e9",
+    background: "#ffffff",
+    surface: "#ffffff",
+    text: "#111827",
+    muted: "#6b7280",
+    radius: 16,
+  };
+  next.ui.extraFields = Array.isArray(next.ui.extraFields) ? next.ui.extraFields : [];
+
+  return next;
+}
+
+function applyUiPatch(patch: any) {
+  const nextGatewaySettings = ensureGatewayUi(gatewaySettings);
+
+  if (patch.theme) {
+    nextGatewaySettings.ui.theme = { ...nextGatewaySettings.ui.theme, ...patch.theme };
+  }
+
+  if (Array.isArray(patch.removeFieldKeys) && patch.removeFieldKeys.length) {
+    nextGatewaySettings.ui.extraFields = nextGatewaySettings.ui.extraFields.filter(
+      (f: any) => !patch.removeFieldKeys.includes(f.key)
+    );
+  }
+
+  if (Array.isArray(patch.addFields) && patch.addFields.length) {
+    for (const f of patch.addFields) {
+      if (!f?.key) continue;
+      const exists = nextGatewaySettings.ui.extraFields.some((x: any) => x.key === f.key);
+      if (!exists) nextGatewaySettings.ui.extraFields.push(f);
+    }
+  }
+
+  setGatewaySettings(nextGatewaySettings);
+
+  // Keep preview iframe in sync without requiring a manual draft save.
+  setTimeout(() => {
+    saveDraft(nextGatewaySettings);
+    setPreviewRefreshKey((value) => value + 1);
+  }, 0);
+}
+
 async function publishConfig() {
   setPublishing(true);
   try {
+    const targetSlug = normalizeSlug(customerSlugInput || customer.slug);
+    if (!targetSlug) {
+      throw new Error("Customer slug is required");
+    }
+
     // Build the config blob you want published
     const config = {
+      customerSlug: targetSlug,
       customerName,
       customerNotes,
+      debugEnabled,
+      branding,
       parameterRows,
       step1Apis,
       step1Mappings,
       compactMode,
+      gatewaySettings: ensureGatewayUi(gatewaySettings),
       // add more later (step5, etc.)
+      step5Apis,
+  step5Mappings,
+  selectedStep5ApiId,
     };
 
     const res = await fetch("/api/config/publish", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        slug: customer.slug,
+        slug: targetSlug,
         customerName,
+        publishedBy: publisherName,
         config,
       }),
     });
@@ -97,8 +262,12 @@ async function publishConfig() {
 
     setPublishInfo({
       supplierUrl: json.supplierUrl,
-      portalUrl: json.portalUrl,
-      publishedAt: json.publishedAt,
+  portalUrl: json.portalUrl,
+  publishedAt: json.publishedAt,
+  publishedBy: json.publishedBy ?? publisherName,
+  publishHistory: Array.isArray(json.publishHistory) ? json.publishHistory : [],
+  apiUsername: json.apiUsername,
+  apiPassword: json.apiPassword ?? null,
     });
 
     toast.success("Published", { description: "URLs generated and config saved." });
@@ -120,31 +289,77 @@ const [compactMode, setCompactMode] = React.useState<boolean>(false);
 const [step1Mappings, setStep1Mappings] = React.useState<MappingRow[]>([
   {
     id: crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2, 10),
+    key: "tender_number",
     label: "Tender Number",
     jsonPath: "$.tender.number",
     type: "String",
     format: "-",
     required: true,
   },
-  {
-    id: crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2, 10),
-    label: "Fee Amount",
-    jsonPath: "$.fee.amount",
-    type: "Number",
-    format: "currency",
-    required: true,
-  },
+  
 ]);
 
 const enabledParamNames = parameterRows
   .filter((p) => p.enabled && p.name.trim())
   .map((p) => p.name.trim());
-  
+
+const previewQueryString = React.useMemo(() => {
+  const params = new URLSearchParams({ preview: "1" });
+
+  parameterRows
+    .filter((p) => p.enabled && p.source === "Query" && p.name.trim())
+    .forEach((p) => {
+      const key = p.name.trim();
+      const fallback =
+        p.defaultValue?.trim() ||
+        (key === "rfxId" ? "rfq_123" : key === "accountId" ? "1040" : key === "userId" ? "1" : `sample_${key}`);
+      params.set(key, paramTestValues[key] || fallback);
+    });
+
+  return params.toString();
+}, [parameterRows, paramTestValues]);
+
 const draftKey = React.useMemo(() => `pg-config-draft:${customer.slug}`, [customer.slug]);
+const [customerSlugInput, setCustomerSlugInput] = React.useState<string>(isNewCustomer ? "" : customer.slug);
+const previewUrl = React.useMemo(
+  () => `/pay/${customerSlugInput || customer.slug}?${previewQueryString}`,
+  [customer.slug, customerSlugInput, previewQueryString]
+);
+const step1Url = React.useMemo(
+  () => `${typeof window !== "undefined" ? window.location.origin : "https://app.domain"}/pay/${customerSlugInput || customer.slug}`,
+  [customer.slug, customerSlugInput]
+);
+const step5Url = React.useMemo(
+  () => `${typeof window !== "undefined" ? window.location.origin : "https://app.domain"}/pay/${customerSlugInput || customer.slug}/step5`,
+  [customer.slug, customerSlugInput]
+);
+const quickLinks = React.useMemo(
+  () => [
+    {
+      label: "Supplier GET URL",
+      value: publishInfo?.supplierUrl ?? step1Url,
+      hint: publishInfo ? "Published supplier entry page." : "Current draft supplier page URL.",
+    },
+    {
+      label: "Portal POST URL",
+      value: publishInfo?.portalUrl ?? `${step1Url.replace(`/pay/${customerSlugInput || customer.slug}`, "")}/${customerSlugInput || customer.slug}/payments`,
+      hint: publishInfo ? "Published portal endpoint for customer integrations." : "Will be finalized on publish.",
+    },
+    {
+      label: "Step 5 URL",
+      value: step5Url,
+      hint: "Payment result page route.",
+    },
+  ],
+  [publishInfo, step1Url, step5Url, customer.slug, customerSlugInput]
+);
 
 const [savingDraft, setSavingDraft] = React.useState(false);
+const [previewRefreshKey, setPreviewRefreshKey] = React.useState(0);
 const [customerName, setCustomerName] = React.useState<string>(customer.name);
 const [customerNotes, setCustomerNotes] = React.useState<string>("");
+const [debugEnabled, setDebugEnabled] = React.useState(false);
+const [branding, setBranding] = React.useState<BrandingSettings>(getDefaultBranding());
 
 async function saveDraftWithFeedback() {
   setSavingDraft(true);
@@ -157,25 +372,90 @@ async function saveDraftWithFeedback() {
 }
 
 React.useEffect(() => {
-  const raw = localStorage.getItem(draftKey);
-  if (!raw) return;
-  try {
-    const d = JSON.parse(raw);
+  if (typeof window === "undefined") return;
+  const savedPublisher = window.localStorage.getItem("pg-publisher-name");
+  if (savedPublisher?.trim()) {
+    setPublisherName(savedPublisher.trim());
+  }
+}, []);
+
+React.useEffect(() => {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem("pg-publisher-name", publisherName.trim() || "Local user");
+}, [publisherName]);
+
+React.useEffect(() => {
+  function hydrateFromConfig(d: any) {
+    if (!d || typeof d !== "object") return;
+    if (typeof d.customerSlug === "string" && d.customerSlug.trim()) setCustomerSlugInput(d.customerSlug.trim());
     if (d.parameterRows) setParameterRows(d.parameterRows);
     if (d.step1Apis) setStep1Apis(d.step1Apis);
     if (d.paramTestValues) setParamTestValues(d.paramTestValues);
     if (d.selectedStep1ApiId) setSelectedStep1ApiId(d.selectedStep1ApiId);
     if (d.step1Mappings) setStep1Mappings(d.step1Mappings);
     if (typeof d.compactMode === "boolean") setCompactMode(d.compactMode);
+    if (typeof d.customerName === "string") setCustomerName(d.customerName);
+    if (typeof d.customerNotes === "string") setCustomerNotes(d.customerNotes);
+    if (typeof d.debugEnabled === "boolean") setDebugEnabled(d.debugEnabled);
+    if (d.branding) setBranding({ ...getDefaultBranding(), ...d.branding });
     if (d.step5Apis) setStep5Apis(d.step5Apis);
-if (d.step5Mappings) setStep5Mappings(d.step5Mappings);
-if (d.selectedStep5ApiId) setSelectedStep5ApiId(d.selectedStep5ApiId);
-  } catch {}
-}, [draftKey]);
+    if (d.step5Mappings) setStep5Mappings(d.step5Mappings);
+    if (d.selectedStep5ApiId) setSelectedStep5ApiId(d.selectedStep5ApiId);
+    if (d.gatewaySettings) setGatewaySettings(ensureGatewayUi(d.gatewaySettings));
+  }
 
-function saveDraft() {
+  const raw = localStorage.getItem(draftKey);
+  if (raw) {
+    try {
+      hydrateFromConfig(JSON.parse(raw));
+      return;
+    } catch {
+      // fall through to published config
+    }
+  }
+
+  if (customer.slug === "new") return;
+
+  let cancelled = false;
+
+  (async () => {
+    try {
+      const publishedPayload = await fetchPublishedConfig(customer.slug);
+      if (!cancelled) {
+        hydrateFromConfig(publishedPayload.config);
+        setPublishInfo({
+          supplierUrl: `${typeof window !== "undefined" ? window.location.origin : "https://app.domain"}/pay/${customer.slug}`,
+          portalUrl: `${typeof window !== "undefined" ? window.location.origin : "https://app.domain"}/${customer.slug}/payments`,
+          publishedAt: publishedPayload.publishedAt,
+          publishedBy: publishedPayload.config?.publishMeta?.lastPublishedBy ?? "Local user",
+          publishHistory: Array.isArray(publishedPayload.config?.publishMeta?.history)
+            ? publishedPayload.config.publishMeta.history
+            : [],
+          apiUsername: customer.slug,
+          apiPassword: null,
+        });
+      }
+    } catch {
+      // no published config yet; keep defaults
+    }
+  })();
+
+  return () => {
+    cancelled = true;
+  };
+}, [draftKey, customer.slug]);
+
+function saveDraft(gatewaySettingsOverride?: any) {
   try {
+    const targetSlug = normalizeSlug(customerSlugInput || customer.slug);
+    if (!targetSlug) {
+      toast.error("Customer slug is required");
+      return false;
+    }
+
+    const safeGatewaySettings = ensureGatewayUi(gatewaySettingsOverride ?? gatewaySettings);
     const payload = {
+      customerSlug: targetSlug,
       parameterRows,
       step1Apis,
       paramTestValues,
@@ -185,20 +465,64 @@ function saveDraft() {
       savedAt: new Date().toISOString(),
       customerName,
 customerNotes,
+debugEnabled,
+branding,
 step5Apis,
 step5Mappings,
 selectedStep5ApiId,
+gatewaySettings: safeGatewaySettings,
     };
-    localStorage.setItem(draftKey, JSON.stringify(payload));
+    localStorage.setItem(`pg-config-draft:${targetSlug}`, JSON.stringify(payload));
+    upsertLocalCustomer({
+      slug: targetSlug,
+      name: customerName.trim() || targetSlug,
+      status: customer.status,
+    });
+    if (customer.slug === "new") {
+      localStorage.removeItem(draftKey);
+    }
+    if (customer.slug !== targetSlug) {
+      router.replace(`/customers/${targetSlug}`);
+    }
     toast.success("Draft saved");
+    return true;
   } catch (e: any) {
     toast.error("Failed to save draft", { description: e?.message ?? "Unknown error" });
+    return false;
   }
 }
 
 function clearDraft() {
-  localStorage.removeItem(draftKey);
+  const targetSlug = normalizeSlug(customerSlugInput || customer.slug);
+  localStorage.removeItem(`pg-config-draft:${targetSlug}`);
 }
+
+async function resetCredentials() {
+  setResettingCreds(true);
+  try {
+    const res = await fetch("/api/config/reset-credentials", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug: customer.slug }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json?.error ?? "Reset failed");
+
+    setPublishInfo((prev) => ({
+      supplierUrl: prev?.supplierUrl ?? "",
+      portalUrl: prev?.portalUrl ?? "",
+      publishedAt: prev?.publishedAt ?? new Date().toISOString(),
+      publishedBy: prev?.publishedBy ?? publisherName,
+      publishHistory: prev?.publishHistory ?? [],
+      apiUsername: json.apiUsername,
+      apiPassword: json.apiPassword, // show once
+    }));
+  } finally {
+    setResettingCreds(false);
+  }
+}
+
+const [resettingCreds, setResettingCreds] = React.useState(false);
 
 const step1Prefixes = React.useMemo(() => {
   const enabledApis = (step1Apis ?? []).filter((a) => a.runInStep1 ?? true);
@@ -214,14 +538,15 @@ const step1Prefixes = React.useMemo(() => {
 }, [step1Apis]);
 
   return (
-     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+     <div className="grid w-full grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
     <div className="min-w-0">
     <Tabs defaultValue="details" className="w-full">
       <TabsList className="w-full justify-start rounded-2xl bg-muted p-1">
         <TabsTrigger value="details" className="rounded-xl">Details</TabsTrigger>
         <TabsTrigger value="params" className="rounded-xl">Parameters</TabsTrigger>
         <TabsTrigger value="step1" className="rounded-xl">Step 1 Page</TabsTrigger>
-        <TabsTrigger value="sim" className="rounded-xl">Simulator</TabsTrigger>
+        <TabsTrigger value="preview" className="rounded-xl">Preview</TabsTrigger>
+        <TabsTrigger value="simulation" className="rounded-xl">Simulator</TabsTrigger>
         <TabsTrigger value="step5" className="rounded-xl">Step 5 Page</TabsTrigger>
         <TabsTrigger value="publish" className="rounded-xl">Publish</TabsTrigger>
       </TabsList>
@@ -245,9 +570,16 @@ const step1Prefixes = React.useMemo(() => {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Slug</label>
-              <Input value={customer.slug} readOnly className="rounded-xl" />
+              <Input
+  value={customerSlugInput}
+  onChange={(e) => setCustomerSlugInput(e.target.value)}
+  readOnly={!isNewCustomer}
+  className="rounded-xl"
+/>
               <div className="text-xs text-muted-foreground">
-                Used in URLs like /pay/{customer.slug}
+                {isNewCustomer
+                  ? "Set this once when creating the customer. It will be used in URLs."
+                  : `Used in URLs like /pay/${customer.slug}`}
               </div>
             </div>
             <div className="space-y-2 sm:col-span-2">
@@ -259,8 +591,58 @@ const step1Prefixes = React.useMemo(() => {
   className="rounded-xl"
 />
             </div>
+            <div className="sm:col-span-2">
+              <div className="flex items-center justify-between rounded-2xl border p-4">
+                <div className="space-y-1">
+                  <div className="text-sm font-medium">Supplier debug details</div>
+                  <div className="text-xs text-muted-foreground">
+                    Show JSONPath labels and the debug panel on the supplier page.
+                  </div>
+                </div>
+                <Switch checked={debugEnabled} onCheckedChange={setDebugEnabled} />
+              </div>
+            </div>
           </CardContent>
         </Card>
+        
+        {publishInfo && (
+  <Card className="rounded-2xl">
+    <CardHeader>
+      <div className="font-semibold">External API Credentials</div>
+      <div className="text-sm text-muted-foreground">
+        Username identifies the customer. Password is shown only once.
+      </div>
+    </CardHeader>
+    <CardContent className="space-y-3">
+      <div className="rounded-xl border p-3">
+        <div className="text-xs text-muted-foreground">Username</div>
+        <div className="font-mono text-sm">{publishInfo.apiUsername}</div>
+      </div>
+
+      <div className="rounded-xl border p-3">
+        <div className="text-xs text-muted-foreground">Password</div>
+        <div className="text-sm">
+          {publishInfo.apiPassword ? (
+            <span className="font-mono">{publishInfo.apiPassword}</span>
+          ) : (
+            <span className="text-muted-foreground">
+              Not available (already created). Use “Reset password” to generate a new one.
+            </span>
+          )}
+        </div>
+      </div>
+      <Button
+  variant="outline"
+  className="rounded-xl"
+  disabled={resettingCreds}
+  onClick={resetCredentials}
+>
+  {resettingCreds ? "Resetting…" : "Reset password"}
+</Button>
+      
+    </CardContent>
+  </Card>
+)}
 
         <Card className="rounded-2xl">
           <CardHeader>
@@ -272,15 +654,40 @@ const step1Prefixes = React.useMemo(() => {
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <label className="text-sm font-medium">Logo</label>
-              <Input type="file" className="rounded-xl" />
+              <Input
+                type="file"
+                accept="image/*"
+                className="rounded-xl"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const dataUrl = await fileToDataUrl(file);
+                  setBranding((prev) => ({ ...prev, logoDataUrl: dataUrl }));
+                }}
+              />
+              {branding.logoDataUrl && (
+                <div className="rounded-xl border p-3">
+                  <img src={branding.logoDataUrl} alt="Logo preview" className="h-10 w-auto object-contain" />
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Primary accent</label>
-              <Input placeholder="#4F46E5" className="rounded-xl" />
+              <Input
+                placeholder="#4F46E5"
+                className="rounded-xl"
+                value={branding.accentColor}
+                onChange={(e) => setBranding((prev) => ({ ...prev, accentColor: e.target.value }))}
+              />
             </div>
             <div className="space-y-2 sm:col-span-2">
               <label className="text-sm font-medium">Footer text</label>
-              <Input placeholder="Powered by …" className="rounded-xl" />
+              <Input
+                placeholder="Powered by …"
+                className="rounded-xl"
+                value={branding.footerText}
+                onChange={(e) => setBranding((prev) => ({ ...prev, footerText: e.target.value }))}
+              />
             </div>
           </CardContent>
         </Card>
@@ -305,87 +712,253 @@ const step1Prefixes = React.useMemo(() => {
       </AccordionContent>
     </AccordionItem>
   </Accordion>
+      </TabsContent>
+
+      <TabsContent value="step1" className="mt-4">
+        <div className="space-y-4">
+          <ApiAccordion
+            title="Input APIs"
+            endpoints={step1Apis}
+            onChange={setStep1Apis}
+            onSelectForMapper={setSelectedStep1ApiId}
+            customerSlug={customerSlugInput || customer.slug}
+            phase="CONFIG_TEST"
+            parameterNames={enabledParamNames}
+            parameterValues={paramTestValues}
+            onChangeParameterValues={setParamTestValues}
+          />
+
+          <ResponseMapper
+            title="Response Mapping (Input → Output)"
+            sampleJson={selectedStep1Api?.sampleResponseJson}
+            rows={step1Mappings}
+            onChange={setStep1Mappings}
+            compactMode={compactMode}
+            onCompactModeChange={setCompactMode}
+            prefixes={step1Prefixes}
+          />
+        </div>
+      </TabsContent>
+
+      <TabsContent value="preview" className="mt-4 space-y-4">
+  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
+    {/* Left: Supplier preview */}
+    <Card className="rounded-2xl">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div className="font-semibold">Supplier Page Preview</div>
+          <a
+            href={previewUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-sm underline"
+          >
+            Open in new tab
+          </a>
+        </div>
+        <div className="text-sm text-muted-foreground">
+          Uses your current draft config (no publish needed).
+        </div>
+      </CardHeader>
+      <CardContent>
+        <iframe
+          key={previewRefreshKey}
+          className="h-[760px] w-full rounded-2xl border bg-background"
+          src={previewUrl}
+        />
+      </CardContent>
+    </Card>
+
+    {/* Right: AI Designer */}
+    <div className="space-y-4">
+      <AiDesignerCard
+        customerSlug={customer.slug}
+        currentUi={gatewaySettings?.ui}
+        onApplyPatch={applyUiPatch}
+      />
+
+      <Card className="rounded-2xl">
+        <CardHeader>
+          <div className="font-semibold">What AI can change</div>
+          <div className="text-sm text-muted-foreground">
+            Adds UI fields and adjusts theme colors in config (no code editing).
+          </div>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground space-y-2">
+          <div>• Add/remove supplier form fields</div>
+          <div>• Match theme colors from portal screenshot</div>
+          <div>• Keep changes in draft until you Publish</div>
+        </CardContent>
+      </Card>
+    </div>
+  </div>
 </TabsContent>
 
-      <TabsContent value="step1" className="mt-4 space-y-4">
-        <ApiAccordion
-  title="Input APIs"
-  endpoints={step1Apis}
-  onChange={setStep1Apis}
-  onSelectForMapper={setSelectedStep1ApiId}
-  parameterNames={enabledParamNames}
-  parameterValues={paramTestValues}
-  onChangeParameterValues={setParamTestValues}
-/>
-
-<ResponseMapper
-  title="Response Mapping (Input → Output)"
-  sampleJson={selectedStep1Api?.sampleResponseJson}
-  rows={step1Mappings}
-  onChange={setStep1Mappings}
-  compactMode={compactMode}
-  onCompactModeChange={setCompactMode}
-  prefixes={step1Prefixes}
-/>
-{publishInfo && (
+      <TabsContent value="simulation" className="mt-4 min-h-[34rem] space-y-4">
   <Card className="rounded-2xl">
     <CardHeader>
-      <div className="font-semibold">Published URLs</div>
+      <div className="font-semibold">Payment Provider</div>
       <div className="text-sm text-muted-foreground">
-        Published at {new Date(publishInfo.publishedAt).toLocaleString()}
+        Choose which provider experience suppliers will see.
       </div>
     </CardHeader>
-    <CardContent className="space-y-3">
-      <div className="space-y-1">
-        <div className="text-sm font-medium">Portal POST URL</div>
-        <div className="text-xs text-muted-foreground">
-          Customer portal should POST form-data here.
-        </div>
-        <div className="rounded-xl border p-3 font-mono text-xs break-all">
-          {publishInfo.portalUrl}
+
+    <CardContent className="space-y-4">
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Provider</label>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {[
+            {
+              value: "SIMULATOR",
+              label: "Payment Gateway simulator",
+              hint: "Approve / Deny test flow",
+            },
+            {
+              value: "CYBERSOURCE",
+              label: "CyberSource Secure Acceptance",
+              hint: "Hosted CyberSource checkout",
+            },
+            {
+              value: "PAYTABS",
+              label: "Paytabs",
+              hint: "Paytabs payment flow",
+            },
+          ].map((option) => {
+            const isActive = gatewaySettings.provider === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() =>
+                  setGatewaySettings((prev: any) => ({ ...prev, provider: option.value }))
+                }
+                className={`rounded-2xl border p-4 text-left transition ${
+                  isActive
+                    ? "border-primary bg-primary/5 shadow-sm"
+                    : "border-border bg-background hover:bg-muted/40"
+                }`}
+              >
+                <div className="text-sm font-medium">{option.label}</div>
+                <div className="mt-1 text-xs text-muted-foreground">{option.hint}</div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      <div className="space-y-1">
-        <div className="text-sm font-medium">Supplier GET URL</div>
-        <div className="text-xs text-muted-foreground">
-          Supplier entry page (redirect target).
+      {gatewaySettings.provider === "CYBERSOURCE" && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2 sm:col-span-2">
+            <label className="text-sm font-medium">Checkout URL</label>
+            <Input
+              className="rounded-xl"
+              value={gatewaySettings.cybersource.checkoutUrl}
+              onChange={(e) =>
+                setGatewaySettings((p: any) => ({
+                  ...p,
+                  cybersource: { ...p.cybersource, checkoutUrl: e.target.value },
+                }))
+              }
+              placeholder="https://..."
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Profile ID</label>
+            <Input
+              className="rounded-xl"
+              value={gatewaySettings.cybersource.profileId}
+              onChange={(e) =>
+                setGatewaySettings((p: any) => ({
+                  ...p,
+                  cybersource: { ...p.cybersource, profileId: e.target.value },
+                }))
+              }
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Access Key</label>
+            <Input
+              className="rounded-xl"
+              value={gatewaySettings.cybersource.accessKey}
+              onChange={(e) =>
+                setGatewaySettings((p: any) => ({
+                  ...p,
+                  cybersource: { ...p.cybersource, accessKey: e.target.value },
+                }))
+              }
+            />
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <label className="text-sm font-medium">Secret Key</label>
+            <Input
+              type="password"
+              className="rounded-xl"
+              value={gatewaySettings.cybersource.secretKey}
+              onChange={(e) =>
+                setGatewaySettings((p: any) => ({
+                  ...p,
+                  cybersource: { ...p.cybersource, secretKey: e.target.value },
+                }))
+              }
+            />
+          </div>
         </div>
-        <div className="rounded-xl border p-3 font-mono text-xs break-all">
-          {publishInfo.supplierUrl}
+      )}
+
+      {gatewaySettings.provider === "PAYTABS" && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Profile ID</label>
+            <Input
+              className="rounded-xl"
+              value={gatewaySettings.paytabs.profileId}
+              onChange={(e) =>
+                setGatewaySettings((p: any) => ({
+                  ...p,
+                  paytabs: { ...p.paytabs, profileId: e.target.value },
+                }))
+              }
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Region</label>
+            <Input
+              className="rounded-xl"
+              value={gatewaySettings.paytabs.region}
+              onChange={(e) =>
+                setGatewaySettings((p: any) => ({
+                  ...p,
+                  paytabs: { ...p.paytabs, region: e.target.value },
+                }))
+              }
+              placeholder="KSA / UAE / ..."
+            />
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <label className="text-sm font-medium">Server Key</label>
+            <Input
+              type="password"
+              className="rounded-xl"
+              value={gatewaySettings.paytabs.serverKey}
+              onChange={(e) =>
+                setGatewaySettings((p: any) => ({
+                  ...p,
+                  paytabs: { ...p.paytabs, serverKey: e.target.value },
+                }))
+              }
+            />
+          </div>
         </div>
-      </div>
+      )}
+
+      {gatewaySettings.provider === "SIMULATOR" && (
+        <div className="rounded-xl border p-4 text-sm text-muted-foreground">
+          Simulator mode: suppliers will see Approve / Deny buttons.
+        </div>
+      )}
     </CardContent>
   </Card>
-)}
-        <GeneratePanel
-          title="Generate Step 1 Page"
-          url={`https://app.domain/pay/${customer.slug}`}
-        />
-      </TabsContent>
-
-      <TabsContent value="sim" className="mt-4 space-y-4">
-        <Card className="rounded-2xl">
-          <CardHeader>
-            <div className="font-semibold">Simulator Settings</div>
-            <div className="text-sm text-muted-foreground">
-              Configure callback behavior for demo/testing.
-            </div>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Mode</label>
-              <Input defaultValue="Manual accept/reject" className="rounded-xl" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Callback URL</label>
-              <Input readOnly value="https://app.domain/callback" className="rounded-xl" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <GeneratePanel title="Preview Simulator" url="https://app.domain/gateway/{sessionId}" />
-      </TabsContent>
+</TabsContent>
 
       <TabsContent value="step5" className="mt-4 space-y-4">
         <ApiAccordion
@@ -393,6 +966,8 @@ const step1Prefixes = React.useMemo(() => {
   endpoints={step5Apis}
   onChange={setStep5Apis}
   onSelectForMapper={setSelectedStep5ApiId}
+  customerSlug={customerSlugInput || customer.slug}
+  phase="CONFIG_TEST"
   parameterNames={enabledParamNames}
   parameterValues={paramTestValues}
   onChangeParameterValues={setParamTestValues}
@@ -408,7 +983,7 @@ const step1Prefixes = React.useMemo(() => {
 />
         <GeneratePanel
           title="Generate Step 5 Page"
-          url={`https://app.domain/status/${customer.slug}`}
+          url={`https://app.domain/status/${customerSlugInput || customer.slug}`}
         />
       </TabsContent>
 
@@ -420,19 +995,93 @@ const step1Prefixes = React.useMemo(() => {
               Validate and publish this configuration.
             </div>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="text-sm">✅ Customer details</div>
-            <div className="text-sm">✅ Parameters</div>
-            <div className="text-sm">⚠️ Step 1 API not tested</div>
-            <div className="text-sm">✅ Step 5 URL generated</div>
+          <CardContent className="space-y-6">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+              <div className="space-y-4 rounded-2xl border p-4">
+                <div className="space-y-1">
+                  <div className="text-sm font-medium">Publish as</div>
+                  <div className="text-xs text-muted-foreground">
+                    Name shown in publish history for this browser.
+                  </div>
+                </div>
+                <Input
+                  value={publisherName}
+                  onChange={(e) => setPublisherName(e.target.value)}
+                  className="rounded-xl"
+                  placeholder="Local user"
+                />
+                <div className="space-y-2 text-sm">
+                  <div>✅ Customer details</div>
+                  <div>✅ Parameters</div>
+                  <div>{step1Apis.length > 0 ? "✅" : "⚠️"} Step 1 APIs configured</div>
+                  <div>{step5Apis.length > 0 ? "✅" : "⚠️"} Step 5 APIs configured</div>
+                </div>
+              </div>
+
+              <div className="space-y-4 rounded-2xl border p-4">
+                <div className="space-y-1">
+                  <div className="text-sm font-medium">Last published</div>
+                  <div className="text-xs text-muted-foreground">
+                    Latest published snapshot for this customer.
+                  </div>
+                </div>
+                <div className="rounded-xl border p-3">
+                  <div className="text-xs text-muted-foreground">Published at</div>
+                  <div className="text-sm">
+                    {publishInfo?.publishedAt
+                      ? new Date(publishInfo.publishedAt).toLocaleString()
+                      : "Not published yet"}
+                  </div>
+                </div>
+                <div className="rounded-xl border p-3">
+                  <div className="text-xs text-muted-foreground">Published by</div>
+                  <div className="text-sm">{publishInfo?.publishedBy ?? "—"}</div>
+                </div>
+              </div>
+            </div>
+
+            <Card className="rounded-2xl border">
+              <CardHeader>
+                <div className="font-semibold">Publish history</div>
+                <div className="text-sm text-muted-foreground">
+                  Most recent publish events for this customer.
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {publishInfo?.publishHistory?.length ? (
+                  publishInfo.publishHistory.map((entry, index) => (
+                    <div
+                      key={`${entry.publishedAt}-${index}`}
+                      className="flex items-center justify-between rounded-xl border p-3 text-sm"
+                    >
+                      <div>
+                        <div className="font-medium">{entry.publishedBy || "Local user"}</div>
+                        <div className="text-xs text-muted-foreground">
+                          Published this config snapshot
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(entry.publishedAt).toLocaleString()}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                    No publish history yet. Publish once and it will appear here.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </CardContent>
         </Card>
       </TabsContent>
     </Tabs>
 </div>
 
-    <StickyActions
-  customer={{ slug: customer.slug, status: customer.status }}
+<StickyActions
+  customer={{ slug: customerSlugInput || customer.slug, status: customer.status }}
+  quickLinks={quickLinks}
+  published={Boolean(publishInfo)}
   onSaveDraft={saveDraftWithFeedback}
   savingDraft={savingDraft}
   onClearDraft={clearDraft}

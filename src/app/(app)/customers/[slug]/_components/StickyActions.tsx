@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 
 export default function StickyActions({
   customer,
+  quickLinks = [],
+  published = false,
   onSaveDraft,
   savingDraft,
   onClearDraft,
@@ -14,6 +16,8 @@ export default function StickyActions({
   publishing,
 }: {
   customer: { slug: string; status: string };
+  quickLinks?: Array<{ label: string; value: string; hint?: string }>;
+  published?: boolean;
   onSaveDraft: () => void;
   savingDraft: boolean;
   onClearDraft: () => void;
@@ -26,8 +30,8 @@ export default function StickyActions({
         <CardHeader className="space-y-2">
           <div className="flex items-center justify-between">
             <div className="font-semibold">Status</div>
-            <Badge variant="secondary" className="rounded-full">
-              Draft
+            <Badge variant={published ? "default" : "secondary"} className="rounded-full">
+              {published ? "Published" : "Draft"}
             </Badge>
           </div>
           <div className="text-sm text-muted-foreground">
@@ -75,18 +79,15 @@ export default function StickyActions({
           <div className="space-y-2">
             <div className="text-sm font-medium">Quick links</div>
             <div className="space-y-2">
-              <div className="text-xs text-muted-foreground">Step 1 URL</div>
-              <Input
-                readOnly
-                value={`https://app.domain/pay/${customer.slug}`}
-                className="rounded-xl"
-              />
-              <div className="text-xs text-muted-foreground">Step 5 URL</div>
-              <Input
-                readOnly
-                value={`https://app.domain/status/${customer.slug}`}
-                className="rounded-xl"
-              />
+              {quickLinks.map((link) => (
+                <div key={link.label} className="space-y-1">
+                  <div className="text-xs text-muted-foreground">{link.label}</div>
+                  {link.hint ? (
+                    <div className="text-[11px] text-muted-foreground">{link.hint}</div>
+                  ) : null}
+                  <Input readOnly value={link.value} className="rounded-xl" />
+                </div>
+              ))}
             </div>
           </div>
         </CardContent>

@@ -1,13 +1,12 @@
-import Link from "next/link";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { getMockCustomers } from "@/lib/mock";
+import { Suspense } from "react";
 import CustomersListClient from "./CustomersListClient";
+import CustomersToolbarClient from "./CustomersToolbarClient";
+import { getCustomersFromDbOrMock } from "@/lib/customers";
+
+export const dynamic = "force-dynamic";
 
 export default async function CustomersPage() {
-  const customersRaw = getMockCustomers();
+  const customersRaw = await getCustomersFromDbOrMock();
 
 // keep ONLY plain JSON fields
 const customersPlain = customersRaw.map((c: any) => ({
@@ -22,26 +21,29 @@ const customers = JSON.parse(JSON.stringify(customersPlain));
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Customers</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Create and manage customer configurations and supplier pages.
-            Draft names are loaded from localStorage on the client.
-          </p>
-        </div>
-        <Button className="rounded-xl">+ New customer</Button>
-      </div>
+  <div>
+    <h1 className="text-3xl font-semibold tracking-tight">Customers</h1>
+    <p className="mt-1 text-sm text-muted-foreground">
+      Create and manage customer configurations and supplier pages.
+      Draft names are loaded from localStorage on the client.
+    </p>
+  </div>
+</div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Input placeholder="Search customers…" className="max-w-sm rounded-xl" />
-        <div className="flex gap-2">
-          <Button variant="outline" className="rounded-xl">Status: All</Button>
-          <Button variant="outline" className="rounded-xl">Sort: Updated</Button>
-        </div>
-      </div>
+<Suspense fallback={<div className="h-10 rounded-xl border bg-muted/30" />}>
+  <CustomersToolbarClient />
+</Suspense>
 
       
-        <CustomersListClient initialCustomers={customers} />
+        <Suspense
+          fallback={
+            <div className="rounded-2xl border p-6 text-sm text-muted-foreground">
+              Loading customers…
+            </div>
+          }
+        >
+          <CustomersListClient initialCustomers={customers} />
+        </Suspense>
       
     </div>
   );

@@ -60,7 +60,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({
-      access_token: payload.token,
+      token: payload.token,
       token_type: payload.token_type ?? "Bearer",
       expires_in: payload.expires_in,
       raw: payload,

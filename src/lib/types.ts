@@ -1,5 +1,26 @@
 export type HttpMethod = "GET" | "POST";
 
+export type GatewayProvider = "SIMULATOR" | "CYBERSOURCE" | "PAYTABS";
+
+export type GatewaySettings = {
+  provider: GatewayProvider;
+
+  // optional provider configs (only show fields for selected provider)
+  cybersource?: {
+    checkoutUrl?: string;
+    profileId?: string;
+    accessKey?: string;
+    secretKey?: string;
+  };
+
+  paytabs?: {
+    profileId?: string;
+    serverKey?: string;
+    region?: string;
+  };
+};
+
+
 export type OAuthGrantType =
   | "client_credentials"
   | "password"

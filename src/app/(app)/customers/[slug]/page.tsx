@@ -1,13 +1,17 @@
 import ConfigStepper from "./_components/ConfigStepper";
-import StickyActions from "./_components/StickyActions";
-import { getMockCustomerBySlug } from "@/lib/mock";
+import { getCustomerBySlugFromDbOrMock } from "@/lib/customers";
+
+export const dynamic = "force-dynamic";
 
 export default async function CustomerConfiguratorPage({
   params,
 }: {
   params: { slug: string };
 }) {
-  const customer = getMockCustomerBySlug(params.slug);
+  const customer =
+    params.slug === "new"
+      ? { name: "New Customer", slug: "new", status: "Inactive" as const, updatedHuman: "—" }
+      : await getCustomerBySlugFromDbOrMock(params.slug);
 
   return (
     <div className="space-y-6">
@@ -20,9 +24,9 @@ export default async function CustomerConfiguratorPage({
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-        <ConfigStepper customer={customer} />
-      </div>
+      <div className="w-full min-w-0">
+  <ConfigStepper customer={customer} />
+</div>
     </div>
   );
 }
