@@ -45,8 +45,8 @@ export default function StickyActions({
             <ul className="space-y-1 text-sm text-muted-foreground">
               <li>• Customer details</li>
               <li>• Parameters</li>
-              <li>• Step 1 API & mapping</li>
-              <li>• Step 5 config</li>
+              <li>• Landing page API & mapping</li>
+              <li>• Result page config</li>
             </ul>
           </div>
 

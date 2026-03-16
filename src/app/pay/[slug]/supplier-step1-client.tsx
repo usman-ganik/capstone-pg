@@ -556,7 +556,7 @@ export default function SupplierStep1Client({ customerSlug }: { customerSlug: st
                     </div>
                 )}
                 <div className="space-y-1">
-                    <div className="text-2xl font-semibold">Tender Fee Payment</div>
+                    <div className="text-2xl font-semibold">Landing Page</div>
                     <div className="text-sm" style={mutedStyle}>
                         Customer: <b>{customerSlug}</b>
                     </div>
@@ -614,14 +614,14 @@ export default function SupplierStep1Client({ customerSlug }: { customerSlug: st
                             <CardHeader>
                                 <div className="font-semibold">Payment Required</div>
                                 <div className="text-sm" style={mutedStyle}>
-                                    Fields below are rendered from Step 1 API response using your mappings.
+                                    Fields below are rendered from the landing page API response using your mappings.
                                 </div>
                             </CardHeader>
 
                             <CardContent className="space-y-4">
                                 {apiLoading && (
                                     <div className="rounded-xl border p-4 text-sm" style={surfaceStyle}>
-                                        Calling Step 1 APIs…
+                                        Calling landing page APIs…
                                     </div>
                                 )}
 

@@ -362,23 +362,41 @@ const step5Url = React.useMemo(
   [customer.slug, customerSlugInput]
 );
 const quickLinks = React.useMemo(
-  () => [
-    {
-      label: "Supplier GET URL",
-      value: publishInfo?.supplierUrl ?? step1Url,
-      hint: publishInfo ? "Published supplier entry page." : "Current draft supplier page URL.",
-    },
-    {
-      label: "Portal POST URL",
-      value: publishInfo?.portalUrl ?? `${step1Url.replace(`/pay/${customerSlugInput || customer.slug}`, "")}/${customerSlugInput || customer.slug}/payments`,
-      hint: publishInfo ? "Published portal endpoint for customer integrations." : "Will be finalized on publish.",
-    },
-    {
-      label: "Step 5 URL",
-      value: step5Url,
-      hint: "Payment result page route.",
-    },
-  ],
+  () => {
+    const baseOrigin =
+      typeof window !== "undefined" ? window.location.origin : "https://app.domain";
+    const targetSlug = customerSlugInput || customer.slug;
+
+    return [
+      {
+        label: "Supplier GET URL",
+        value: publishInfo?.supplierUrl ?? step1Url,
+        hint: publishInfo ? "Published landing page for suppliers." : "Current draft landing page URL.",
+      },
+      {
+        label: "Portal POST URL",
+        value:
+          publishInfo?.portalUrl ??
+          `${step1Url.replace(`/pay/${targetSlug}`, "")}/${targetSlug}/payments`,
+        hint: publishInfo ? "Published portal endpoint for customer integrations." : "Will be finalized on publish.",
+      },
+      {
+        label: "Result Page URL",
+        value: step5Url,
+        hint: "Return/result page route after payment.",
+      },
+      {
+        label: "External Payments Page",
+        value: `${baseOrigin}/external/payments/${targetSlug}`,
+        hint: "Basic-auth protected external HTML payments report.",
+      },
+      {
+        label: "Payments Export API",
+        value: `${baseOrigin}/api/payments/export?limit=200`,
+        hint: "Basic-auth protected JSON export for payment sessions.",
+      },
+    ];
+  },
   [publishInfo, step1Url, step5Url, customer.slug, customerSlugInput]
 );
 
@@ -581,10 +599,10 @@ const step1Prefixes = React.useMemo(() => {
       <TabsList className="w-full justify-start rounded-2xl bg-muted p-1">
         <TabsTrigger value="details" className="rounded-xl">Details</TabsTrigger>
         <TabsTrigger value="params" className="rounded-xl">Parameters</TabsTrigger>
-        <TabsTrigger value="step1" className="rounded-xl">Step 1 Page</TabsTrigger>
+        <TabsTrigger value="step1" className="rounded-xl">Landing Page</TabsTrigger>
         <TabsTrigger value="preview" className="rounded-xl">Preview</TabsTrigger>
         <TabsTrigger value="simulation" className="rounded-xl">Simulator</TabsTrigger>
-        <TabsTrigger value="step5" className="rounded-xl">Step 5 Page</TabsTrigger>
+        <TabsTrigger value="step5" className="rounded-xl">Result Page (Optional)</TabsTrigger>
         <TabsTrigger value="publish" className="rounded-xl">Publish</TabsTrigger>
       </TabsList>
 
@@ -737,7 +755,7 @@ const step1Prefixes = React.useMemo(() => {
       <TabsContent value="step1" className="mt-4">
         <div className="space-y-4">
           <ApiAccordion
-            title="Input APIs"
+            title="Landing Page APIs"
             endpoints={step1Apis}
             onChange={setStep1Apis}
             onSelectForMapper={setSelectedStep1ApiId}
@@ -749,7 +767,7 @@ const step1Prefixes = React.useMemo(() => {
           />
 
           <ResponseMapper
-            title="Response Mapping (Input → Output)"
+            title="Landing Page Response Mapping"
             sampleJson={selectedStep1Api?.sampleResponseJson}
             rows={step1Mappings}
             onChange={setStep1Mappings}
@@ -760,7 +778,7 @@ const step1Prefixes = React.useMemo(() => {
 
           <Card className="rounded-2xl">
             <CardHeader>
-              <div className="font-semibold">Step 1 Actions</div>
+              <div className="font-semibold">Landing Page Actions</div>
               <div className="text-sm text-muted-foreground">
                 Configure the primary supplier action shown below the mapped payment fields.
               </div>
@@ -990,8 +1008,21 @@ const step1Prefixes = React.useMemo(() => {
       )}
 
       {gatewaySettings.provider === "SIMULATOR" && (
-        <div className="rounded-xl border p-4 text-sm text-muted-foreground">
-          Simulator mode: suppliers will see Approve / Deny buttons.
+        <div className="space-y-3 rounded-xl border p-4">
+          <div className="text-sm text-muted-foreground">
+            Simulator mode shows approve and deny actions before redirecting to the result page.
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button className="rounded-xl" disabled>
+              Approved
+            </Button>
+            <Button variant="destructive" className="rounded-xl" disabled>
+              Denied
+            </Button>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Preview only in the configurator. Real actions happen in the supplier payment flow.
+          </div>
         </div>
       )}
     </CardContent>
@@ -1000,7 +1031,7 @@ const step1Prefixes = React.useMemo(() => {
 
       <TabsContent value="step5" className="mt-4 space-y-4">
         <ApiAccordion
-  title="Step 5 APIs"
+  title="Result Page APIs"
   endpoints={step5Apis}
   onChange={setStep5Apis}
   onSelectForMapper={setSelectedStep5ApiId}
@@ -1011,7 +1042,7 @@ const step1Prefixes = React.useMemo(() => {
   onChangeParameterValues={setParamTestValues}
 />
         <ResponseMapper
-  title="Step 5 Response Mapping"
+  title="Result Page Response Mapping"
   sampleJson={selectedStep5Api?.sampleResponseJson}
   rows={step5Mappings}
   onChange={setStep5Mappings}
@@ -1022,9 +1053,9 @@ const step1Prefixes = React.useMemo(() => {
 />
         <Card className="rounded-2xl">
           <CardHeader>
-            <div className="font-semibold">Step 5 Notes</div>
+            <div className="font-semibold">Result Page Notes</div>
             <div className="text-sm text-muted-foreground">
-              Optional helper text shown below the mapped output fields on the Step 5 page.
+              Optional helper text shown below the mapped output fields on the result page.
             </div>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
@@ -1036,7 +1067,7 @@ const step1Prefixes = React.useMemo(() => {
                   setStep5Notes((prev) => ({ ...prev, success: e.target.value }))
                 }
                 className="rounded-xl"
-                placeholder="Shown when Step 5 completes successfully."
+                placeholder="Shown when the result page loads successfully."
                 rows={4}
               />
             </div>
@@ -1048,7 +1079,7 @@ const step1Prefixes = React.useMemo(() => {
                   setStep5Notes((prev) => ({ ...prev, error: e.target.value }))
                 }
                 className="rounded-xl"
-                placeholder="Shown when Step 5 API execution fails."
+                placeholder="Shown when result page execution fails."
                 rows={4}
               />
             </div>

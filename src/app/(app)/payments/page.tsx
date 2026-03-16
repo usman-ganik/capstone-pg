@@ -84,7 +84,7 @@ export default async function PaymentsPage({
   return (
     <div className="space-y-6">
       <div>
-        <div className="text-2xl font-semibold">Payments</div>
+        <div className="text-2xl font-semibold">Payment Sessions</div>
         <div className="text-sm text-muted-foreground">
           All payment sessions (latest 500).
         </div>

@@ -44,6 +44,11 @@ function applyTemplateDot(input: string, values: any) {
   });
 }
 
+function isHttpUrl(value: unknown) {
+  if (typeof value !== "string") return false;
+  return /^https?:\/\//i.test(value.trim());
+}
+
 
 export default function Step5Page() {
   const params = useParams<{ slug: string }>();
@@ -156,11 +161,17 @@ export default function Step5Page() {
 
   const mappings = config?.step5Mappings ?? [];
   const step5Notes = config?.step5Notes ?? { success: "", error: "" };
+  const sessionStatus = String(session?.status ?? "").toUpperCase();
+  const showSuccessNote = !loading && !err && sessionStatus === "APPROVED" && Boolean(step5Notes.success);
+  const showErrorNote =
+    (!loading && sessionStatus === "DENIED" && Boolean(step5Notes.error)) ||
+    (Boolean(err) && Boolean(step5Notes.error));
 
-  const outputRows: Array<{ label: string; value: unknown }> =
+  const outputRows: Array<{ label: string; type: string; value: unknown }> =
     combined && mappings.length
-      ? mappings.map((m: any): { label: string; value: unknown } => ({
+      ? mappings.map((m: any): { label: string; type: string; value: unknown } => ({
           label: m.label,
+          type: m.type ?? "String",
           value: debugJsonPath(combined, m.jsonPath).finalValue,
         }))
       : [];
@@ -169,16 +180,16 @@ export default function Step5Page() {
     <div className="mx-auto max-w-4xl p-6 space-y-6">
       <Card className="rounded-2xl">
         <CardHeader>
-          <div className="text-lg font-semibold">Step 5: Payment Result</div>
+          <div className="text-lg font-semibold">Result Page: Payment Result</div>
           <div className="text-sm text-muted-foreground">
             Customer: <b>{slug}</b> • Session: <span className="font-mono">{sessionId}</span>
           </div>
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {loading && <div className="rounded-xl border bg-muted p-4 text-sm">Loading Step 5…</div>}
+          {loading && <div className="rounded-xl border bg-muted p-4 text-sm">Loading result page…</div>}
           {err && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{err}</div>}
-          {err && step5Notes.error ? (
+          {showErrorNote ? (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
               {step5Notes.error}
             </div>
@@ -194,21 +205,34 @@ export default function Step5Page() {
             <>
               {outputRows.length === 0 ? (
                 <div className="text-sm text-muted-foreground">
-                  No Step 5 mappings configured yet.
+                  No result page mappings configured yet.
                 </div>
               ) : (
                 <>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    {outputRows.map((o: { label: string; value: unknown }, idx: number) => (
+                    {outputRows.map((o: { label: string; type: string; value: unknown }, idx: number) => (
                       <div key={idx} className="rounded-xl border p-3">
                         <div className="text-xs text-muted-foreground">{o.label}</div>
                         <div className="mt-1 text-sm font-medium">
-                          {o.value == null || o.value === "" ? "—" : String(o.value)}
+                          {o.value == null || o.value === "" ? (
+                            "—"
+                          ) : o.type === "URL" && isHttpUrl(o.value) ? (
+                            <a
+                              href={String(o.value)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="underline"
+                            >
+                              {String(o.value)}
+                            </a>
+                          ) : (
+                            String(o.value)
+                          )}
                         </div>
                       </div>
                     ))}
                   </div>
-                  {step5Notes.success ? (
+                  {showSuccessNote ? (
                     <div className="rounded-xl border bg-muted/40 p-4 text-sm text-muted-foreground">
                       {step5Notes.success}
                     </div>

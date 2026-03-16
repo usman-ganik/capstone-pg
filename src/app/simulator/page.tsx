@@ -84,8 +84,18 @@ function SimulatorPageInner() {
               </Button>
             </div>
           ) : (
-            <div className="rounded-xl border p-4 text-sm text-muted-foreground">
-              {provider} integration coming next. Use simulator for now.
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                <Button className="rounded-xl" disabled>
+                  Approved
+                </Button>
+                <Button variant="destructive" className="rounded-xl" disabled>
+                  Denied
+                </Button>
+              </div>
+              <div className="rounded-xl border p-4 text-sm text-muted-foreground">
+                {provider} integration is shown here as a visual placeholder only. Use Simulator for working approve/deny actions.
+              </div>
             </div>
           )}
 
