@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
 import ApiAccordion from "./ApiAccordion";
-import GeneratePanel from "./GeneratePanel";
 
 import StickyActions from "./StickyActions";
 import ResponseMapper, { MappingRow } from "./ResponseMapper";
@@ -58,6 +57,14 @@ function normalizeSlug(value: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function normalizeKey(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 }
 
 function fileToDataUrl(file: File) {
@@ -129,6 +136,11 @@ const [publisherName, setPublisherName] = React.useState<string>("Local user");
 const [step5Apis, setStep5Apis] = React.useState<ApiEndpointConfig[]>([]);
 const [selectedStep5ApiId, setSelectedStep5ApiId] = React.useState<string | null>(null);
 const [step5Mappings, setStep5Mappings] = React.useState<MappingRow[]>([]);
+const [step5Notes, setStep5Notes] = React.useState<{ success: string; error: string }>({
+  success: "",
+  error: "",
+});
+const [step1ButtonLabel, setStep1ButtonLabel] = React.useState<string>("Pay Tender Fee");
 
 const selectedStep5Api = React.useMemo(
   () => step5Apis.find((a) => a.id === selectedStep5ApiId) ?? step5Apis[0],
@@ -237,11 +249,13 @@ async function publishConfig() {
       parameterRows,
       step1Apis,
       step1Mappings,
+      step1ButtonLabel,
       compactMode,
       gatewaySettings: ensureGatewayUi(gatewaySettings),
       // add more later (step5, etc.)
       step5Apis,
   step5Mappings,
+  step5Notes,
   selectedStep5ApiId,
     };
 
@@ -297,6 +311,21 @@ const [step1Mappings, setStep1Mappings] = React.useState<MappingRow[]>([
   },
   
 ]);
+
+const step1StableKeyPaths = React.useMemo(
+  () =>
+    (step1Mappings ?? [])
+      .map((row) => {
+        const stableKey = (row.key || "").trim() || normalizeKey(row.label || "");
+        if (!stableKey) return null;
+        return {
+          label: `Step 1: ${stableKey}`,
+          path: `$.step1.${stableKey}`,
+        };
+      })
+      .filter(Boolean) as Array<{ label: string; path: string }>,
+  [step1Mappings]
+);
 
 const enabledParamNames = parameterRows
   .filter((p) => p.enabled && p.name.trim())
@@ -392,6 +421,7 @@ React.useEffect(() => {
     if (d.paramTestValues) setParamTestValues(d.paramTestValues);
     if (d.selectedStep1ApiId) setSelectedStep1ApiId(d.selectedStep1ApiId);
     if (d.step1Mappings) setStep1Mappings(d.step1Mappings);
+    if (typeof d.step1ButtonLabel === "string") setStep1ButtonLabel(d.step1ButtonLabel);
     if (typeof d.compactMode === "boolean") setCompactMode(d.compactMode);
     if (typeof d.customerName === "string") setCustomerName(d.customerName);
     if (typeof d.customerNotes === "string") setCustomerNotes(d.customerNotes);
@@ -399,6 +429,12 @@ React.useEffect(() => {
     if (d.branding) setBranding({ ...getDefaultBranding(), ...d.branding });
     if (d.step5Apis) setStep5Apis(d.step5Apis);
     if (d.step5Mappings) setStep5Mappings(d.step5Mappings);
+    if (d.step5Notes) {
+      setStep5Notes({
+        success: typeof d.step5Notes.success === "string" ? d.step5Notes.success : "",
+        error: typeof d.step5Notes.error === "string" ? d.step5Notes.error : "",
+      });
+    }
     if (d.selectedStep5ApiId) setSelectedStep5ApiId(d.selectedStep5ApiId);
     if (d.gatewaySettings) setGatewaySettings(ensureGatewayUi(d.gatewaySettings));
   }
@@ -460,6 +496,7 @@ function saveDraft(gatewaySettingsOverride?: any) {
       paramTestValues,
       selectedStep1ApiId,
       step1Mappings,
+      step1ButtonLabel,
       compactMode,
       savedAt: new Date().toISOString(),
       customerName,
@@ -468,6 +505,7 @@ debugEnabled,
 branding,
 step5Apis,
 step5Mappings,
+step5Notes,
 selectedStep5ApiId,
 gatewaySettings: safeGatewaySettings,
     };
@@ -719,6 +757,24 @@ const step1Prefixes = React.useMemo(() => {
             onCompactModeChange={setCompactMode}
             prefixes={step1Prefixes}
           />
+
+          <Card className="rounded-2xl">
+            <CardHeader>
+              <div className="font-semibold">Step 1 Actions</div>
+              <div className="text-sm text-muted-foreground">
+                Configure the primary supplier action shown below the mapped payment fields.
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <label className="text-sm font-medium">Submit button label</label>
+              <Input
+                value={step1ButtonLabel}
+                onChange={(e) => setStep1ButtonLabel(e.target.value)}
+                className="w-full max-w-sm rounded-xl"
+                placeholder="Pay Tender Fee"
+              />
+            </CardContent>
+          </Card>
         </div>
       </TabsContent>
 
@@ -962,11 +1018,42 @@ const step1Prefixes = React.useMemo(() => {
   compactMode={compactMode}
   onCompactModeChange={setCompactMode}
   prefixes={step5Prefixes}
+  quickPaths={step1StableKeyPaths}
 />
-        <GeneratePanel
-          title="Generate Step 5 Page"
-          url={`https://app.domain/status/${customerSlugInput || customer.slug}`}
-        />
+        <Card className="rounded-2xl">
+          <CardHeader>
+            <div className="font-semibold">Step 5 Notes</div>
+            <div className="text-sm text-muted-foreground">
+              Optional helper text shown below the mapped output fields on the Step 5 page.
+            </div>
+          </CardHeader>
+          <CardContent className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Success note</label>
+              <Textarea
+                value={step5Notes.success}
+                onChange={(e) =>
+                  setStep5Notes((prev) => ({ ...prev, success: e.target.value }))
+                }
+                className="rounded-xl"
+                placeholder="Shown when Step 5 completes successfully."
+                rows={4}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Error note</label>
+              <Textarea
+                value={step5Notes.error}
+                onChange={(e) =>
+                  setStep5Notes((prev) => ({ ...prev, error: e.target.value }))
+                }
+                className="rounded-xl"
+                placeholder="Shown when Step 5 API execution fails."
+                rows={4}
+              />
+            </div>
+          </CardContent>
+        </Card>
       </TabsContent>
 
       <TabsContent value="publish" className="mt-4 space-y-4">

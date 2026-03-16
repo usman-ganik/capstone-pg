@@ -178,6 +178,7 @@ export default function ResponseMapper({
   compactMode,
   onCompactModeChange,
   prefixes = [],
+  quickPaths = [],
 }: {
   title: string;
   isStatusFields?: boolean;
@@ -187,6 +188,7 @@ export default function ResponseMapper({
   compactMode: boolean;
   onCompactModeChange: (v: boolean) => void;
   prefixes?: Array<{ label: string; path: string }>;
+  quickPaths?: Array<{ label: string; path: string }>;
 }) {
   const [selectedRowId, setSelectedRowId] = React.useState<string | null>(
     rows[0]?.id ?? null
@@ -319,6 +321,34 @@ export default function ResponseMapper({
             </div>
           </div>
 
+          {quickPaths.length > 0 && (
+            <div className="space-y-2">
+              <div className="space-y-1">
+                <div className="text-xs font-medium text-muted-foreground">
+                  Step 1 stable keys
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  Use these to map values already captured in Step 1, such as
+                  <span className="font-mono"> $.step1.rfx_number</span>.
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {quickPaths.map((item) => (
+                  <Button
+                    key={item.path}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl"
+                    onClick={() => applyPathToSelectedRow(item.path)}
+                  >
+                    {item.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {rows.length === 0 ? (
             <div className="rounded-xl border p-4 text-sm text-muted-foreground">
               No mapping fields yet. Click <b>+ Add field</b>.
@@ -362,6 +392,9 @@ export default function ResponseMapper({
                             }}
                             onClick={(e) => e.stopPropagation()}
                           />
+                          <div className="mt-1 text-[11px] text-muted-foreground">
+                            Stable key: <span className="font-mono">{(r.key || normalizeKey(r.label) || "—")}</span>
+                          </div>
                         </td>
                         <td className="px-3 py-2 align-top">
                           <div className="rounded-xl border bg-muted/30 px-3 py-2 font-mono text-xs whitespace-nowrap">

@@ -17,6 +17,7 @@ type DraftShape = {
   customerName?: string;
   customerNotes?: string;
   debugEnabled?: boolean;
+  step1ButtonLabel?: string;
   parameterRows: ParameterRow[];
   step1Apis: ApiEndpointConfig[];
   step1Mappings: MappingRow[];
@@ -172,6 +173,11 @@ function previewValueFor(m: any) {
     return m.jsonPath ? `(${m.jsonPath})` : "(not mapped)";
 }
 
+function isHttpUrl(value: unknown) {
+    if (typeof value !== "string") return false;
+    return /^https?:\/\//i.test(value.trim());
+}
+
 function buildInitialFormValues(parameterRows: ParameterRow[] = []) {
     const init: Record<string, string> = {};
 
@@ -248,6 +254,7 @@ export default function SupplierStep1Client({ customerSlug }: { customerSlug: st
     const extraFields = Array.isArray(gatewayUi.extraFields) ? gatewayUi.extraFields : [];
     const theme = draft?.gatewaySettings?.ui?.theme ?? {};
     const branding = draft?.branding ?? {};
+    const payButtonLabel = draft?.step1ButtonLabel?.trim() || "Pay Tender Fee";
     const debugEnabled = Boolean(draft?.debugEnabled);
     const accentColor = branding.accentColor || theme.primary || "#0ea5e9";
     const surfaceStyle: React.CSSProperties = {
@@ -490,6 +497,7 @@ export default function SupplierStep1Client({ customerSlug }: { customerSlug: st
                     const v = getValueByJsonPath(combinedResponse, p);
                     return {
                         label: m.label,
+                        type: m.type,
                         jsonPath: p,
                         value: v ?? null,
                     };
@@ -497,6 +505,7 @@ export default function SupplierStep1Client({ customerSlug }: { customerSlug: st
 
                 return {
                     label: m.label,
+                    type: m.type,
                     jsonPath: normalizePath(m.jsonPath),
                     value: previewValueFor(m),
                 };
@@ -634,7 +643,21 @@ export default function SupplierStep1Client({ customerSlug }: { customerSlug: st
                                                     <div key={idx} className="rounded-xl border p-3" style={surfaceStyle}>
                                                         <div className="text-xs" style={mutedStyle}>{o.label}</div>
                                                         <div className="mt-1 text-sm font-medium">
-                                                            {o.value == null || o.value === "" ? "—" : String(o.value)}
+                                                            {o.value == null || o.value === "" ? (
+                                                                "—"
+                                                            ) : o.type === "URL" && isHttpUrl(o.value) ? (
+                                                                <a
+                                                                    href={String(o.value)}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    className="underline"
+                                                                    style={{ color: accentColor }}
+                                                                >
+                                                                    {String(o.value)}
+                                                                </a>
+                                                            ) : (
+                                                                String(o.value)
+                                                            )}
                                                         </div>
                                                         {debugEnabled ? (
                                                             <div className="mt-1 text-[11px] font-mono break-all" style={mutedStyle}>
@@ -646,8 +669,26 @@ export default function SupplierStep1Client({ customerSlug }: { customerSlug: st
                                             </div>
                                         )}
                                         {isPreview ? (
-                                            <div className="rounded-xl border p-4 text-sm" style={{ ...surfaceStyle, ...mutedStyle }}>
-                                                Preview mode: API calls are disabled. This view shows configured fields only.
+                                            <div className="space-y-3 pt-2">
+                                                <div className="flex flex-wrap gap-2">
+                                                    <Button
+                                                        className="rounded-xl"
+                                                        style={primaryButtonStyle}
+                                                        disabled
+                                                    >
+                                                        {payButtonLabel}
+                                                    </Button>
+                                                    <Button
+                                                        variant="outline"
+                                                        className="rounded-xl"
+                                                        disabled
+                                                    >
+                                                        Refresh
+                                                    </Button>
+                                                </div>
+                                                <div className="rounded-xl border p-4 text-sm" style={{ ...surfaceStyle, ...mutedStyle }}>
+                                                    Preview mode: API calls and payment actions are disabled. This view shows the configured layout only.
+                                                </div>
                                             </div>
                                         ) : (
                                             <div className="flex flex-wrap gap-2 pt-2">
@@ -697,7 +738,7 @@ export default function SupplierStep1Client({ customerSlug }: { customerSlug: st
                                                     }}
                                                 >
 
-                                                    {paying ? "Redirecting…" : "Pay Tender Fee"}
+                                                    {paying ? "Redirecting…" : payButtonLabel}
                                                 </Button>
 
                                                 <Button

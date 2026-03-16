@@ -86,8 +86,15 @@ export default function Step5Page() {
         const apis = (cfg.step5Apis ?? []).filter((a: any) => a.runInStep1 ?? true);
         const results: any[] = [];
         const step1Mapped = sessJson?.metadata?.step1Mapped ?? {};
+        const stepParams = {
+          slug,
+          sessionId,
+          rfxId: sessJson?.rfx_id ?? "",
+          accountId: sessJson?.account_id ?? "",
+          userId: sessJson?.user_id ?? "",
+        };
         const templateValues = {
-          params: { slug },
+          params: stepParams,
           session: sessJson,
           step1: step1Mapped,
         };
@@ -132,7 +139,7 @@ export default function Step5Page() {
 
         // Build combined object for mapper
         const combinedObj = {
-          params: { slug },
+          params: stepParams,
           session: sessJson,
           step1: step1Mapped,
           results,
@@ -148,6 +155,7 @@ export default function Step5Page() {
   }, [slug, sessionId]);
 
   const mappings = config?.step5Mappings ?? [];
+  const step5Notes = config?.step5Notes ?? { success: "", error: "" };
 
   const outputRows: Array<{ label: string; value: unknown }> =
     combined && mappings.length
@@ -170,6 +178,11 @@ export default function Step5Page() {
         <CardContent className="space-y-4">
           {loading && <div className="rounded-xl border bg-muted p-4 text-sm">Loading Step 5…</div>}
           {err && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{err}</div>}
+          {err && step5Notes.error ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              {step5Notes.error}
+            </div>
+          ) : null}
 
           {!loading && !err && session && (
             <div className="rounded-xl border p-4 text-sm">
@@ -184,16 +197,23 @@ export default function Step5Page() {
                   No Step 5 mappings configured yet.
                 </div>
               ) : (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {outputRows.map((o: { label: string; value: unknown }, idx: number) => (
-                    <div key={idx} className="rounded-xl border p-3">
-                      <div className="text-xs text-muted-foreground">{o.label}</div>
-                      <div className="mt-1 text-sm font-medium">
-                        {o.value == null || o.value === "" ? "—" : String(o.value)}
+                <>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {outputRows.map((o: { label: string; value: unknown }, idx: number) => (
+                      <div key={idx} className="rounded-xl border p-3">
+                        <div className="text-xs text-muted-foreground">{o.label}</div>
+                        <div className="mt-1 text-sm font-medium">
+                          {o.value == null || o.value === "" ? "—" : String(o.value)}
+                        </div>
                       </div>
+                    ))}
+                  </div>
+                  {step5Notes.success ? (
+                    <div className="rounded-xl border bg-muted/40 p-4 text-sm text-muted-foreground">
+                      {step5Notes.success}
                     </div>
-                  ))}
-                </div>
+                  ) : null}
+                </>
               )}
             </>
           )}
