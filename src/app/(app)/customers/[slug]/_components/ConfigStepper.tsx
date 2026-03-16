@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
-import LivePreview from "./LivePreview";
 import ApiAccordion from "./ApiAccordion";
 import GeneratePanel from "./GeneratePanel";
 
@@ -695,23 +694,6 @@ const step1Prefixes = React.useMemo(() => {
 
  <TabsContent value="params" className="mt-4 space-y-4">
   <ParameterBuilder rows={parameterRows} onChange={setParameterRows} />
-
-  <Accordion type="single" collapsible defaultValue="preview">
-    <AccordionItem value="preview" className="rounded-2xl border bg-background">
-      <AccordionTrigger className="px-5 py-4 hover:no-underline">
-        <div className="flex w-full items-center justify-between">
-          <div className="text-sm font-semibold">Supplier Form Preview</div>
-          <div className="text-xs text-muted-foreground">
-            Click to {/** purely visual text */""}expand/collapse
-          </div>
-        </div>
-      </AccordionTrigger>
-
-      <AccordionContent className="px-5 pb-5">
-        <LivePreview rows={parameterRows} />
-      </AccordionContent>
-    </AccordionItem>
-  </Accordion>
       </TabsContent>
 
       <TabsContent value="step1" className="mt-4">

@@ -13,13 +13,6 @@ import {
   AlertTitle,
 } from "@/components/ui/alert";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Table,
   TableBody,
   TableHead,
@@ -172,13 +165,13 @@ export default function ParameterBuilder({
   <Table className="w-max min-w-full">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-14 whitespace-nowrap">On</TableHead>
-                <TableHead className="min-w-[160px]">Name</TableHead>
-                <TableHead className="min-w-[140px]">Source</TableHead>
-                <TableHead className="min-w-[160px]">Type</TableHead>
+                <TableHead className="min-w-[150px]">Name</TableHead>
+                <TableHead className="min-w-[160px]">Label (UI)</TableHead>
+                <TableHead className="w-[120px] whitespace-nowrap">Source</TableHead>
+                <TableHead className="w-[120px] whitespace-nowrap">Type</TableHead>
                 <TableHead className="w-20">Req</TableHead>
+                <TableHead className="w-20 whitespace-nowrap">Enabled</TableHead>
                 <TableHead className="min-w-[180px]">Default</TableHead>
-                <TableHead className="min-w-[180px]">Label (UI)</TableHead>
                 <TableHead className="w-16 whitespace-nowrap" />
               </TableRow>
             </TableHeader>
@@ -190,15 +183,6 @@ export default function ParameterBuilder({
 
                 return (
                   <TableRow key={r.id}>
-                    <TableCell className="align-top">
-                      <Checkbox
-                        checked={r.enabled}
-                        onCheckedChange={(v) =>
-                          updateRow(r.id, { enabled: Boolean(v) })
-                        }
-                      />
-                    </TableCell>
-
                     <TableCell className="align-top">
                       <Input
                         value={r.name}
@@ -213,49 +197,46 @@ export default function ParameterBuilder({
                         <div className="mt-1 text-xs text-red-600">{err?.name}</div>
                       )}
                       <div className="mt-1 text-[11px] text-muted-foreground">
-                        Stable key (no spaces). Example: <code>supplierName</code>
+                        Key only, example: <code>supplierName</code>
                       </div>
                     </TableCell>
 
                     <TableCell className="align-top">
-                      <Select
+                      <Input
+                        value={r.label}
+                        onChange={(e) => updateRow(r.id, { label: e.target.value })}
+                        placeholder="What users see"
+                        className="rounded-xl"
+                      />
+                    </TableCell>
+
+                    <TableCell className="align-top">
+                      <select
                         value={r.source}
-                        onValueChange={(v) =>
-                          updateRow(r.id, { source: v as ParamSource })
-                        }
+                        onChange={(e) => updateRow(r.id, { source: e.target.value as ParamSource })}
+                        className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                        title="Query = URL, Form = typed input"
                       >
-                        <SelectTrigger className="rounded-xl">
-                          <SelectValue placeholder="Select" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {SOURCE_OPTIONS.map((opt) => (
-                            <SelectItem key={opt} value={opt}>
-                              {opt}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <div className="mt-1 text-[11px] text-muted-foreground">
-                        Query = from URL, Form = user input
-                      </div>
+                        {SOURCE_OPTIONS.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
                     </TableCell>
 
                     <TableCell className="align-top">
-                      <Select
+                      <select
                         value={r.type}
-                        onValueChange={(v) => updateRow(r.id, { type: v as ParamType })}
+                        onChange={(e) => updateRow(r.id, { type: e.target.value as ParamType })}
+                        className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
                       >
-                        <SelectTrigger className="rounded-xl">
-                          <SelectValue placeholder="Select" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {TYPE_OPTIONS.map((opt) => (
-                            <SelectItem key={opt} value={opt}>
-                              {opt}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        {TYPE_OPTIONS.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
                     </TableCell>
 
                     <TableCell className="align-top">
@@ -268,21 +249,21 @@ export default function ParameterBuilder({
                     </TableCell>
 
                     <TableCell className="align-top">
+                      <Checkbox
+                        checked={r.enabled}
+                        onCheckedChange={(v) =>
+                          updateRow(r.id, { enabled: Boolean(v) })
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell className="align-top">
                       <Input
                         value={r.defaultValue}
                         onChange={(e) =>
                           updateRow(r.id, { defaultValue: e.target.value })
                         }
                         placeholder={r.type === "Boolean" ? "true/false" : "optional"}
-                        className="rounded-xl"
-                      />
-                    </TableCell>
-
-                    <TableCell className="align-top">
-                      <Input
-                        value={r.label}
-                        onChange={(e) => updateRow(r.id, { label: e.target.value })}
-                        placeholder="What users see"
                         className="rounded-xl"
                       />
                     </TableCell>
@@ -312,7 +293,7 @@ export default function ParameterBuilder({
             {enabledCount} enabled • {rows.length} total
           </div>
           <div className="text-xs">
-            Next we’ll wire this state into <b>Live Preview</b> so it updates automatically.
+            Source: Query = URL, Form = typed input
           </div>
         </div>
       </CardContent>

@@ -79,8 +79,15 @@ async function fetchPublishedConfig(slug: string) {
     return json.config;
 }
 
-function applyTemplate(input: string, values: Record<string, string>) {
-    return (input ?? "").replace(/\{\{(\w+)\}\}/g, (_, key) => values[key] ?? "");
+function getByDotPath(values: any, path: string) {
+    return path.split(".").reduce((acc, key) => (acc == null ? undefined : acc[key]), values);
+}
+
+function applyTemplate(input: string, values: any) {
+    return (input ?? "").replace(/\{\{([\w.]+)\}\}/g, (_, key) => {
+        const resolved = getByDotPath(values, key);
+        return resolved == null ? "" : String(resolved);
+    });
 }
 
 function normalizePath(p: string) {
@@ -377,13 +384,17 @@ export default function SupplierStep1Client({ customerSlug }: { customerSlug: st
 
             try {
                 const results: any[] = [];
+                const templateValues = {
+                    params: allParamValues,
+                    ...allParamValues,
+                };
 
                 for (const api of apis) {
                     const resolved: ApiEndpointConfig = {
                         ...api,
-                        url: applyTemplate(api.url, allParamValues),
-                        headersJson: applyTemplate(api.headersJson ?? "", allParamValues),
-                        requestBodyJson: applyTemplate(api.requestBodyJson ?? "", allParamValues),
+                        url: applyTemplate(api.url, templateValues),
+                        headersJson: applyTemplate(api.headersJson ?? "", templateValues),
+                        requestBodyJson: applyTemplate(api.requestBodyJson ?? "", templateValues),
                     };
 
                     const resp = await fetch("/api/proxy/call", {

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import type { ApiEndpointConfig, HttpMethod } from "@/lib/types";
+import { Eye, EyeOff } from "lucide-react";
 
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -160,6 +161,7 @@ export default function ApiAccordion({
   }
 
   const [testingId, setTestingId] = React.useState<string | null>(null);
+  const [visibleSecrets, setVisibleSecrets] = React.useState<Record<string, boolean>>({});
   function applyTemplate(input: string, values: Record<string, string>) {
     return (input ?? "").replace(/\{\{(\w+)\}\}/g, (_, k) => values[k] ?? "");
 }
@@ -410,20 +412,18 @@ setTestingId(null);
 
                           <div className="space-y-2">
                             <label className="text-sm font-medium">Method</label>
-                            <Select
+                            <select
                               value={endpoint.method}
-                              onValueChange={(v) =>
-                                updateEndpoint(endpoint.id, { method: v as HttpMethod })
+                              onChange={(ev) =>
+                                updateEndpoint(endpoint.id, {
+                                  method: ev.target.value as HttpMethod,
+                                })
                               }
+                              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
                             >
-                              <SelectTrigger className="rounded-xl">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="GET">GET</SelectItem>
-                                <SelectItem value="POST">POST</SelectItem>
-                              </SelectContent>
-                            </Select>
+                              <option value="GET">GET</option>
+                              <option value="POST">POST</option>
+                            </select>
                           </div>
 
                           <div className="space-y-2 sm:col-span-2">
@@ -511,16 +511,44 @@ setTestingId(null);
                               </div>
                               <div className="space-y-2">
                                 <label className="text-sm font-medium">Client Secret</label>
-                                <Input
-                                  type="password"
-                                  value={endpoint.oauthClientSecret ?? ""}
-                                  onChange={(ev) =>
-                                    updateEndpoint(endpoint.id, {
-                                      oauthClientSecret: ev.target.value,
-                                    })
-                                  }
-                                  className="rounded-xl"
-                                />
+                                <div className="relative">
+                                  <Input
+                                    type={visibleSecrets[endpoint.id] ? "text" : "password"}
+                                    value={endpoint.oauthClientSecret ?? ""}
+                                    onChange={(ev) =>
+                                      updateEndpoint(endpoint.id, {
+                                        oauthClientSecret: ev.target.value,
+                                      })
+                                    }
+                                    className="rounded-xl pr-10"
+                                  />
+                                  <button
+                                    type="button"
+                                    aria-label={
+                                      visibleSecrets[endpoint.id]
+                                        ? "Hide client secret"
+                                        : "Show client secret"
+                                    }
+                                    title={
+                                      visibleSecrets[endpoint.id]
+                                        ? "Hide client secret"
+                                        : "Show client secret"
+                                    }
+                                    onClick={() =>
+                                      setVisibleSecrets((prev) => ({
+                                        ...prev,
+                                        [endpoint.id]: !prev[endpoint.id],
+                                      }))
+                                    }
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                  >
+                                    {visibleSecrets[endpoint.id] ? (
+                                      <EyeOff className="h-4 w-4" />
+                                    ) : (
+                                      <Eye className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                </div>
                               </div>
                             </>
                           )}
