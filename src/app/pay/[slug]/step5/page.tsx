@@ -169,11 +169,13 @@ export default function Step5Page() {
 
   const outputRows: Array<{ label: string; type: string; value: unknown }> =
     combined && mappings.length
-      ? mappings.map((m: any): { label: string; type: string; value: unknown } => ({
-          label: m.label,
-          type: m.type ?? "String",
-          value: debugJsonPath(combined, m.jsonPath).finalValue,
-        }))
+      ? mappings
+          .filter((m: any) => m.display !== false)
+          .map((m: any): { label: string; type: string; value: unknown } => ({
+            label: m.label,
+            type: m.type ?? "String",
+            value: debugJsonPath(combined, m.jsonPath).finalValue,
+          }))
       : [];
 
   return (

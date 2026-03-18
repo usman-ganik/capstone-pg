@@ -3,13 +3,10 @@ import { ensureApiCallLogsTable } from "@/lib/api-call-logs";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import LocalDateTime from "@/components/LocalDateTime";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export const dynamic = "force-dynamic";
-
-function toISODateOnly(d?: string | null) {
-  return d?.slice(0, 10) ?? "";
-}
 
 export default async function ApiCallsPage({
   searchParams,
@@ -180,7 +177,9 @@ export default async function ApiCallsPage({
               <TableBody>
                 {rowsRes.rows.map((row) => (
                   <TableRow key={row.id}>
-                    <TableCell>{toISODateOnly(row.created_at?.toISOString?.() ?? String(row.created_at))}</TableCell>
+                    <TableCell>
+                      <LocalDateTime value={row.created_at?.toISOString?.() ?? String(row.created_at)} />
+                    </TableCell>
                     <TableCell className="font-mono text-xs">{row.customer_slug ?? "—"}</TableCell>
                     <TableCell className="text-xs">{row.phase ?? "—"}</TableCell>
                     <TableCell>{row.endpoint_name ?? "—"}</TableCell>

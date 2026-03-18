@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getPool } from "@/lib/db";
+import { ensurePaymentSessionsSchema } from "@/lib/payment-sessions-schema";
 import bcrypt from "bcryptjs";
 
 async function authCustomer(req: Request, slug: string) {
@@ -52,7 +53,7 @@ export async function GET(req: Request, { params }: { params: { slug: string } }
   }
   if (rfx.trim()) {
     values.push(`%${rfx.trim()}%`);
-    where.push(`rfx_id ILIKE $${values.length}`);
+    where.push(`(rfx_id ILIKE $${values.length} OR rfx_number ILIKE $${values.length})`);
   }
   if (supplier.trim()) {
     values.push(`%${supplier.trim()}%`);
@@ -70,9 +71,10 @@ export async function GET(req: Request, { params }: { params: { slug: string } }
   }
 
   const pool = getPool();
+  await ensurePaymentSessionsSchema(pool);
   const rowsRes = await pool.query(
     `
-    SELECT id, rfx_id, supplier_name, supplier_email, amount, currency,
+    SELECT id, rfx_id, rfx_number, supplier_name, supplier_email, amount, currency,
            status, provider, received_number, created_at, decided_at
     FROM payment_sessions
     WHERE ${where.join(" AND ")}
@@ -90,6 +92,7 @@ export async function GET(req: Request, { params }: { params: { slug: string } }
         <tr style="border-bottom:1px solid #eee">
           <td style="padding:8px">${created}</td>
           <td style="padding:8px">${r.rfx_id ?? "—"}</td>
+          <td style="padding:8px">${r.rfx_number ?? "—"}</td>
           <td style="padding:8px">
             <div>${r.supplier_name ?? "—"}</div>
             <div style="font-size:12px;opacity:.7">${r.supplier_email ?? ""}</div>
@@ -148,6 +151,7 @@ export async function GET(req: Request, { params }: { params: { slug: string } }
         <tr style="text-align:left;border-bottom:1px solid #ddd">
           <th style="padding:8px">Created</th>
           <th style="padding:8px">RFX</th>
+          <th style="padding:8px">RFX Number</th>
           <th style="padding:8px">Supplier</th>
           <th style="padding:8px">Amount</th>
           <th style="padding:8px">Status</th>
@@ -157,7 +161,7 @@ export async function GET(req: Request, { params }: { params: { slug: string } }
         </tr>
       </thead>
       <tbody>
-        ${rowsHtml || `<tr><td colspan="8" style="padding:12px;opacity:.7">No results</td></tr>`}
+        ${rowsHtml || `<tr><td colspan="9" style="padding:12px;opacity:.7">No results</td></tr>`}
       </tbody>
     </table>
   </div>

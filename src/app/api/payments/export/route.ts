@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getPool } from "@/lib/db";
 import { authenticateBasic } from "@/lib/basicAuth";
 import { insertApiCallLog } from "@/lib/api-call-logs";
+import { ensurePaymentSessionsSchema } from "@/lib/payment-sessions-schema";
 
 export async function GET(req: Request) {
   const startedAt = Date.now();
@@ -31,9 +32,10 @@ export async function GET(req: Request) {
   }
 
   const pool = getPool();
+  await ensurePaymentSessionsSchema(pool);
   const r = await pool.query(
     `SELECT
-       id, customer_slug, rfx_id, account_id, user_id,
+       id, customer_slug, rfx_id, rfx_number, account_id, user_id,
        supplier_name, supplier_email,
        amount, currency,
        status, provider,

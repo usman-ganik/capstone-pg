@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS payment_sessions (
   id TEXT PRIMARY KEY,
   customer_slug TEXT NOT NULL REFERENCES customer_configs(slug) ON DELETE CASCADE,
   rfx_id TEXT,
+  rfx_number TEXT,
   account_id TEXT,
   user_id TEXT,
   supplier_name TEXT,
@@ -62,6 +63,9 @@ CREATE INDEX IF NOT EXISTS idx_payment_sessions_status
 
 CREATE INDEX IF NOT EXISTS idx_payment_sessions_rfx_id
   ON payment_sessions (rfx_id);
+
+CREATE INDEX IF NOT EXISTS idx_payment_sessions_rfx_number
+  ON payment_sessions (rfx_number);
 
 
 CREATE TABLE IF NOT EXISTS api_call_logs (

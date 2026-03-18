@@ -31,6 +31,7 @@ export type MappingRow = {
   id: string;
   key: string;
   label: string;
+  display?: boolean;
   jsonPath: string;
   type: OutputType;
   format: OutputFormat;
@@ -49,34 +50,6 @@ function normalizeKey(label: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
-}
-
-function getValueByJsonPath(obj: any, path: string) {
-  if (!obj || !path) return undefined;
-
-  let p = path.trim();
-  if (p.startsWith("$.")) p = p.slice(2);
-  else if (p.startsWith("$")) p = p.slice(1);
-  if (p && !p.startsWith(".") && !p.startsWith("[")) p = "." + p;
-
-  const tokens: Array<string | number> = [];
-  const re = /(?:\.([A-Za-z_]\w*))|(?:\[(\d+)\])|(?:\["([^"]+)"\])|(?:\['([^']+)'\])/g;
-
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(p)) !== null) {
-    if (match[1] !== undefined) tokens.push(match[1]);
-    else if (match[2] !== undefined) tokens.push(Number(match[2]));
-    else if (match[3] !== undefined) tokens.push(match[3]);
-    else if (match[4] !== undefined) tokens.push(match[4]);
-  }
-
-  let current = obj;
-  for (const token of tokens) {
-    current = current?.[token as any];
-    if (current === undefined) break;
-  }
-
-  return current;
 }
 
 function applyPrefixToJsonPath(currentPath: string, prefixPath: string) {
@@ -222,6 +195,7 @@ export default function ResponseMapper({
       id: uid(),
       key: "",
       label: "",
+      display: true,
       jsonPath: "",
       type: "String",
       format: "-",
@@ -360,7 +334,7 @@ export default function ResponseMapper({
                   <tr className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                     <th className="px-3 py-2">Row</th>
                     <th className="px-3 py-2">Label</th>
-                    <th className="px-3 py-2">Sample value</th>
+                    <th className="px-3 py-2">Display</th>
                     <th className="px-3 py-2">JSONPath</th>
                     <th className="px-3 py-2">Type</th>
                     <th className="px-3 py-2">Action</th>
@@ -396,13 +370,14 @@ export default function ResponseMapper({
                           </div>
                         </td>
                         <td className="px-3 py-2 align-top">
-                          <div className="rounded-xl border bg-muted/30 px-3 py-2 font-mono text-xs whitespace-nowrap">
-                            {(() => {
-                              const sampleValue = getValueByJsonPath(sampleObject, r.jsonPath);
-                              if (sampleValue == null || sampleValue === "") return "—";
-                              if (typeof sampleValue === "object") return JSON.stringify(sampleValue);
-                              return String(sampleValue);
-                            })()}
+                          <div className="flex h-10 items-center">
+                            <Checkbox
+                              checked={r.display !== false}
+                              onCheckedChange={(value) =>
+                                updateRow(r.id, { display: Boolean(value) })
+                              }
+                              onClick={(e) => e.stopPropagation()}
+                            />
                           </div>
                         </td>
                         <td className="px-3 py-2 align-top">

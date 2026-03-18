@@ -313,6 +313,7 @@ const [step1Mappings, setStep1Mappings] = React.useState<MappingRow[]>([
     id: crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2, 10),
     key: "tender_number",
     label: "Tender Number",
+    display: true,
     jsonPath: "$.tender.number",
     type: "String",
     format: "-",

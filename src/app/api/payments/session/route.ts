@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getPool } from "@/lib/db";
+import { ensurePaymentSessionsSchema } from "@/lib/payment-sessions-schema";
 import crypto from "node:crypto";
 
 export async function POST(req: Request) {
@@ -12,6 +13,7 @@ export async function POST(req: Request) {
     }
 
     const pool = getPool();
+    await ensurePaymentSessionsSchema(pool);
     const configRes = await pool.query(
       `SELECT config_json FROM customer_configs WHERE slug = $1`,
       [customerSlug]
@@ -36,6 +38,7 @@ export async function POST(req: Request) {
       id,
       customer_slug: customerSlug,
       rfx_id: body.rfxId ?? null,
+      rfx_number: body.rfxNumber ?? null,
       account_id: body.accountId ?? null,
       user_id: body.userId ?? null,
       supplier_name: body.supplierName ?? null,
@@ -52,14 +55,15 @@ export async function POST(req: Request) {
 
     await pool.query(
       `INSERT INTO payment_sessions
-       (id, customer_slug, rfx_id, account_id, user_id, supplier_name, supplier_email,
+       (id, customer_slug, rfx_id, rfx_number, account_id, user_id, supplier_name, supplier_email,
         amount, currency, status, provider, received_number, gateway_reference, created_at, metadata)
        VALUES
-       ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb)`,
+       ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb)`,
       [
         payload.id,
         payload.customer_slug,
         payload.rfx_id,
+        payload.rfx_number,
         payload.account_id,
         payload.user_id,
         payload.supplier_name,

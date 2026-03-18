@@ -2,6 +2,8 @@ import { getPool } from "@/lib/db";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import LocalDateTime from "@/components/LocalDateTime";
+import { ensurePaymentSessionsSchema } from "@/lib/payment-sessions-schema";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -9,8 +11,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 export const dynamic = "force-dynamic";
 
-function toISODateOnly(d?: string | null) {
-  return d?.slice(0, 10) ?? "";
+function pickMappedValue(values: Record<string, any> | null | undefined, candidates: string[]) {
+  if (!values || typeof values !== "object") return null;
+  for (const key of candidates) {
+    const value = values[key];
+    if (value == null) continue;
+    if (typeof value === "string" && !value.trim()) continue;
+    return value;
+  }
+  return null;
 }
 
 export default async function PaymentsPage({
@@ -19,6 +28,7 @@ export default async function PaymentsPage({
   searchParams: Record<string, string | string[] | undefined>;
 }) {
   const pool = getPool();
+  await ensurePaymentSessionsSchema(pool);
 
   const customer = (searchParams.customer as string) || "all";
   const status = (searchParams.status as string) || "all";
@@ -41,7 +51,7 @@ export default async function PaymentsPage({
   }
   if (rfx.trim()) {
     values.push(`%${rfx.trim()}%`);
-    where.push(`rfx_id ILIKE $${values.length}`);
+    where.push(`(rfx_id ILIKE $${values.length} OR rfx_number ILIKE $${values.length})`);
   }
   if (supplier.trim()) {
     values.push(`%${supplier.trim()}%`);
@@ -65,12 +75,12 @@ export default async function PaymentsPage({
   const rowsRes = await pool.query(
     `
     SELECT
-      id, customer_slug, rfx_id,
+      id, customer_slug, rfx_id, rfx_number,
       supplier_name, supplier_email,
       amount, currency,
       status, provider,
       received_number,
-      created_at, decided_at
+      created_at, decided_at, metadata
     FROM payment_sessions
     ${whereSql}
     ORDER BY created_at DESC
@@ -173,6 +183,7 @@ export default async function PaymentsPage({
                   <TableHead>Created</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>RFX</TableHead>
+                  <TableHead>RFX Number</TableHead>
                   <TableHead>Supplier</TableHead>
                   <TableHead>Amount</TableHead>
                   <TableHead>Status</TableHead>
@@ -184,9 +195,22 @@ export default async function PaymentsPage({
               <TableBody>
                 {rowsRes.rows.map((r) => (
                   <TableRow key={r.id}>
-                    <TableCell>{toISODateOnly(r.created_at?.toISOString?.() ?? String(r.created_at))}</TableCell>
+                    <>
+                    <TableCell>
+                      <LocalDateTime value={r.created_at?.toISOString?.() ?? String(r.created_at)} />
+                    </TableCell>
                     <TableCell className="font-mono text-xs">{r.customer_slug}</TableCell>
                     <TableCell className="font-mono text-xs">{r.rfx_id ?? "—"}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {r.rfx_number ?? pickMappedValue(r.metadata?.step1Mapped, [
+                        "tender_number",
+                        "tenderNumber",
+                        "rfx_number",
+                        "rfxNumber",
+                        "event_number",
+                        "eventNumber",
+                      ]) ?? "—"}
+                    </TableCell>
                     <TableCell>
                       <div className="text-sm">{r.supplier_name ?? "—"}</div>
                       <div className="text-xs text-muted-foreground">{r.supplier_email ?? ""}</div>
@@ -196,11 +220,12 @@ export default async function PaymentsPage({
                     <TableCell>{r.provider}</TableCell>
                     <TableCell className="font-mono text-xs">{r.received_number ?? "—"}</TableCell>
                     <TableCell className="font-mono text-xs">{r.id}</TableCell>
+                    </>
                   </TableRow>
                 ))}
                 {rowsRes.rows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-sm text-muted-foreground">
+                    <TableCell colSpan={10} className="text-sm text-muted-foreground">
                       No results
                     </TableCell>
                   </TableRow>

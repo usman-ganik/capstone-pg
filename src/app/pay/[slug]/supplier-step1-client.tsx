@@ -193,6 +193,16 @@ function buildInitialFormValues(parameterRows: ParameterRow[] = []) {
     return init;
 }
 
+function pickFirstNonEmpty(values: Record<string, any>, candidates: string[]) {
+    for (const key of candidates) {
+        const value = values[key];
+        if (value == null) continue;
+        if (typeof value === "string" && !value.trim()) continue;
+        return value;
+    }
+    return null;
+}
+
 function ensureGatewayUi(gatewaySettings?: DraftShape["gatewaySettings"]) {
     const next = gatewaySettings ? structuredClone(gatewaySettings) : {};
 
@@ -499,7 +509,9 @@ export default function SupplierStep1Client({ customerSlug }: { customerSlug: st
 
     const outputRows =
         mappings.length > 0
-            ? mappings.map((m) => {
+            ? mappings
+                .filter((m) => m.display !== false)
+                .map((m) => {
                 if (!isPreview && combinedResponse) {
                     const p = normalizePath(m.jsonPath);
                     const v = getValueByJsonPath(combinedResponse, p);
@@ -695,11 +707,6 @@ export default function SupplierStep1Client({ customerSlug }: { customerSlug: st
                                                     onClick={async () => {
                                                         setPaying(true);
                                                         try {
-                                                            // choose amount/currency from your mapped outputs or API response
-                                                            // simplest: pull from combinedResponse results[0] value + currency if available
-                                                            const amount = debugJsonPath(combinedResponse, "$.results[0].dataList.rfx[0].rfxSetting.value").finalValue ?? null;
-                                                            const currency = debugJsonPath(combinedResponse, "$.results[0].dataList.rfx[0].rfxSetting.valueCurrency").finalValue ?? null;
-
                                                             const step1Mapped: Record<string, any> = {};
                                                             for (const m of mappings) {
                                                                 const stable = (m.key || "").trim() || normalizeKey(m.label || m.id);
@@ -707,14 +714,85 @@ export default function SupplierStep1Client({ customerSlug }: { customerSlug: st
                                                                 step1Mapped[stable] = getValueByJsonPath(combinedResponse, normalizedPath) ?? null;
                                                             }
 
+                                                            const sessionLookup = {
+                                                                ...step1Mapped,
+                                                                ...allParamValues,
+                                                            };
+
+                                                            const rfxId = pickFirstNonEmpty(sessionLookup, [
+                                                                "rfxId",
+                                                                "rfxRef",
+                                                                "rfx_id",
+                                                                "rfx_ref",
+                                                                "tender_number",
+                                                                "tenderNumber",
+                                                                "tender_id",
+                                                                "tenderId",
+                                                            ]);
+
+                                                            const rfxNumber = pickFirstNonEmpty(sessionLookup, [
+                                                                "tender_number",
+                                                                "tenderNumber",
+                                                                "rfx_number",
+                                                                "rfxNumber",
+                                                                "event_number",
+                                                                "eventNumber",
+                                                            ]);
+
+                                                            const supplierName = pickFirstNonEmpty(sessionLookup, [
+                                                                "supplierName",
+                                                                "supplier_name",
+                                                                "vendorName",
+                                                                "vendor_name",
+                                                                "name",
+                                                            ]);
+
+                                                            const supplierEmail = pickFirstNonEmpty(sessionLookup, [
+                                                                "supplierEmail",
+                                                                "supplier_email",
+                                                                "email",
+                                                                "vendorEmail",
+                                                                "vendor_email",
+                                                            ]);
+
+                                                            const amount =
+                                                                pickFirstNonEmpty(sessionLookup, [
+                                                                    "amount",
+                                                                    "fee_amount",
+                                                                    "feeAmount",
+                                                                    "tender_fee",
+                                                                    "tenderFee",
+                                                                    "payment_amount",
+                                                                    "paymentAmount",
+                                                                    "value",
+                                                                ]) ??
+                                                                debugJsonPath(combinedResponse, "$.results[0].dataList.rfx[0].rfxSetting.value").finalValue ??
+                                                                null;
+
+                                                            const currency =
+                                                                pickFirstNonEmpty(sessionLookup, [
+                                                                    "currency",
+                                                                    "fee_currency",
+                                                                    "feeCurrency",
+                                                                    "payment_currency",
+                                                                    "paymentCurrency",
+                                                                    "value_currency",
+                                                                    "valueCurrency",
+                                                                ]) ??
+                                                                debugJsonPath(combinedResponse, "$.results[0].dataList.rfx[0].rfxSetting.valueCurrency").finalValue ??
+                                                                null;
+
                                                             const res = await fetch("/api/payments/session", {
                                                                 method: "POST",
                                                                 headers: { "Content-Type": "application/json" },
                                                                 body: JSON.stringify({
                                                                     customerSlug,
-                                                                    rfxId: allParamValues.rfxId,
+                                                                    rfxId,
+                                                                    rfxNumber,
                                                                     accountId: allParamValues.accountId,
                                                                     userId: allParamValues.userId,
+                                                                    supplierName,
+                                                                    supplierEmail,
                                                                     amount,
                                                                     currency,
                                                                     step1Mapped,
