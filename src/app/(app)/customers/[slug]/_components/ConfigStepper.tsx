@@ -131,6 +131,7 @@ const [publishInfo, setPublishInfo] = React.useState<{
   apiUsername: string;
   apiPassword: string | null;
 } | null>(null);
+const [hasSavedDraft, setHasSavedDraft] = React.useState(false);
 const [publisherName, setPublisherName] = React.useState<string>("Local user");
 
 const [step5Apis, setStep5Apis] = React.useState<ApiEndpointConfig[]>([]);
@@ -141,6 +142,8 @@ const [step5Notes, setStep5Notes] = React.useState<{ success: string; error: str
   error: "",
 });
 const [step1ButtonLabel, setStep1ButtonLabel] = React.useState<string>("Pay Tender Fee");
+const [landingPageNote, setLandingPageNote] = React.useState<string>("");
+const [landingPageSectionTitle, setLandingPageSectionTitle] = React.useState<string>("Payment Required");
 
 const selectedStep5Api = React.useMemo(
   () => step5Apis.find((a) => a.id === selectedStep5ApiId) ?? step5Apis[0],
@@ -178,6 +181,7 @@ function ensureGatewayUi(gs: any) {
   next.ui = next.ui ?? {
     theme: {
       primary: "#0ea5e9",
+      link: "#0ea5e9",
       background: "#ffffff",
       surface: "#ffffff",
       text: "#111827",
@@ -190,12 +194,14 @@ function ensureGatewayUi(gs: any) {
   // ensure sub-shapes
   next.ui.theme = next.ui.theme ?? {
     primary: "#0ea5e9",
+    link: "#0ea5e9",
     background: "#ffffff",
     surface: "#ffffff",
     text: "#111827",
     muted: "#6b7280",
     radius: 16,
   };
+  next.ui.theme.link = next.ui.theme.link ?? next.ui.theme.primary ?? "#0ea5e9";
   next.ui.extraFields = Array.isArray(next.ui.extraFields) ? next.ui.extraFields : [];
 
   return next;
@@ -250,6 +256,8 @@ async function publishConfig() {
       step1Apis,
       step1Mappings,
       step1ButtonLabel,
+      landingPageNote,
+      landingPageSectionTitle,
       compactMode,
       gatewaySettings: ensureGatewayUi(gatewaySettings),
       // add more later (step5, etc.)
@@ -282,6 +290,7 @@ async function publishConfig() {
   apiUsername: json.apiUsername,
   apiPassword: json.apiPassword ?? null,
     });
+    setHasSavedDraft(false);
 
     toast.success("Published", { description: "URLs generated and config saved." });
   } catch (e: any) {
@@ -440,6 +449,8 @@ React.useEffect(() => {
     if (d.selectedStep1ApiId) setSelectedStep1ApiId(d.selectedStep1ApiId);
     if (d.step1Mappings) setStep1Mappings(d.step1Mappings);
     if (typeof d.step1ButtonLabel === "string") setStep1ButtonLabel(d.step1ButtonLabel);
+    if (typeof d.landingPageNote === "string") setLandingPageNote(d.landingPageNote);
+    if (typeof d.landingPageSectionTitle === "string") setLandingPageSectionTitle(d.landingPageSectionTitle);
     if (typeof d.compactMode === "boolean") setCompactMode(d.compactMode);
     if (typeof d.customerName === "string") setCustomerName(d.customerName);
     if (typeof d.customerNotes === "string") setCustomerNotes(d.customerNotes);
@@ -461,6 +472,7 @@ React.useEffect(() => {
   if (raw) {
     try {
       hydrateFromConfig(JSON.parse(raw));
+      setHasSavedDraft(true);
       return;
     } catch {
       // fall through to published config
@@ -515,6 +527,8 @@ function saveDraft(gatewaySettingsOverride?: any) {
       selectedStep1ApiId,
       step1Mappings,
       step1ButtonLabel,
+      landingPageNote,
+      landingPageSectionTitle,
       compactMode,
       savedAt: new Date().toISOString(),
       customerName,
@@ -531,8 +545,9 @@ gatewaySettings: safeGatewaySettings,
     upsertLocalCustomer({
       slug: targetSlug,
       name: customerName.trim() || targetSlug,
-      status: customer.status,
+      status: "Inactive",
     });
+    setHasSavedDraft(true);
     if (customer.slug === "new") {
       localStorage.removeItem(draftKey);
     }
@@ -550,6 +565,7 @@ gatewaySettings: safeGatewaySettings,
 function clearDraft() {
   const targetSlug = normalizeSlug(customerSlugInput || customer.slug);
   localStorage.removeItem(`pg-config-draft:${targetSlug}`);
+  setHasSavedDraft(false);
 }
 
 async function resetCredentials() {
@@ -784,13 +800,36 @@ const step1Prefixes = React.useMemo(() => {
               </div>
             </CardHeader>
             <CardContent className="space-y-2">
-              <label className="text-sm font-medium">Submit button label</label>
-              <Input
-                value={step1ButtonLabel}
-                onChange={(e) => setStep1ButtonLabel(e.target.value)}
-                className="w-full max-w-sm rounded-xl"
-                placeholder="Pay Tender Fee"
-              />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Section title</label>
+                  <Input
+                    value={landingPageSectionTitle}
+                    onChange={(e) => setLandingPageSectionTitle(e.target.value)}
+                    className="w-full max-w-sm rounded-xl"
+                    placeholder="Payment Required"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Submit button label</label>
+                  <Input
+                    value={step1ButtonLabel}
+                    onChange={(e) => setStep1ButtonLabel(e.target.value)}
+                    className="w-full max-w-sm rounded-xl"
+                    placeholder="Pay Tender Fee"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Landing page note</label>
+                <Textarea
+                  value={landingPageNote}
+                  onChange={(e) => setLandingPageNote(e.target.value)}
+                  className="max-w-2xl rounded-xl"
+                  placeholder="Explain why the supplier landed on this page and what they should do next."
+                  rows={3}
+                />
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -1181,7 +1220,7 @@ const step1Prefixes = React.useMemo(() => {
 <StickyActions
   customer={{ slug: customerSlugInput || customer.slug, status: customer.status }}
   quickLinks={quickLinks}
-  published={Boolean(publishInfo)}
+  published={Boolean(publishInfo) && !hasSavedDraft}
   onSaveDraft={saveDraftWithFeedback}
   savingDraft={savingDraft}
   onClearDraft={clearDraft}

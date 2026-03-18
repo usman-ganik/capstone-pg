@@ -384,11 +384,10 @@ export default function ResponseMapper({
                             placeholder="Display label"
                             className="rounded-xl w-full"
                             value={r.label}
-                            onChange={(e) => {
-                              const nextLabel = e.target.value;
-                              const patch: Partial<MappingRow> = { label: nextLabel };
-                              if (!r.key?.trim()) patch.key = normalizeKey(nextLabel);
-                              updateRow(r.id, patch);
+                            onChange={(e) => updateRow(r.id, { label: e.target.value })}
+                            onBlur={(e) => {
+                              if (r.key?.trim()) return;
+                              updateRow(r.id, { key: normalizeKey(e.target.value) });
                             }}
                             onClick={(e) => e.stopPropagation()}
                           />

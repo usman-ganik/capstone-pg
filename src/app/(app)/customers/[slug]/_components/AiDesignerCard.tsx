@@ -5,9 +5,6 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { toast } from "sonner";
 
 type Provider = "openai" | "openrouter";
@@ -15,6 +12,7 @@ type Provider = "openai" | "openrouter";
 export type UiPatch = {
   theme?: Partial<{
     primary: string;
+    link: string;
     background: string;
     surface: string;
     text: string;
@@ -135,22 +133,21 @@ export default function AiDesignerCard({
       </CardHeader>
 
       <CardContent className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-[132px_minmax(240px,1fr)]">
           <div className="space-y-2">
             <div className="text-sm font-medium">Provider</div>
-            <Select value={provider} onValueChange={(v) => setProvider(v as Provider)}>
-              <SelectTrigger className="rounded-xl">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="openai">OpenAI</SelectItem>
-                <SelectItem value="openrouter">OpenRouter</SelectItem>
-              </SelectContent>
-            </Select>
+            <select
+              value={provider}
+              onChange={(e) => setProvider(e.target.value as Provider)}
+              className="h-10 w-fit min-w-[140px] rounded-xl border border-input bg-background px-3 text-sm"
+            >
+              <option value="openai">OpenAI</option>
+              <option value="openrouter">OpenRouter</option>
+            </select>
           </div>
 
-          <div className="space-y-2">
-            <div className="text-sm font-medium">API key (stored in browser only)</div>
+          <div className="space-y-2 sm:pl-2">
+            <div className="text-sm font-medium whitespace-nowrap">API key (stored in browser only)</div>
             <Input
               type="password"
               className="rounded-xl"

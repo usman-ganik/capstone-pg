@@ -18,6 +18,8 @@ type DraftShape = {
   customerNotes?: string;
   debugEnabled?: boolean;
   step1ButtonLabel?: string;
+  landingPageNote?: string;
+  landingPageSectionTitle?: string;
   parameterRows: ParameterRow[];
   step1Apis: ApiEndpointConfig[];
   step1Mappings: MappingRow[];
@@ -45,6 +47,7 @@ type DraftShape = {
     ui?: {
       theme?: {
         primary?: string;
+        link?: string;
         background?: string;
         surface?: string;
         text?: string;
@@ -208,6 +211,7 @@ function ensureGatewayUi(gatewaySettings?: DraftShape["gatewaySettings"]) {
     next.ui = next.ui ?? {
         theme: {
             primary: "#0ea5e9",
+            link: "#0ea5e9",
             background: "#ffffff",
             surface: "#ffffff",
             text: "#111827",
@@ -218,12 +222,14 @@ function ensureGatewayUi(gatewaySettings?: DraftShape["gatewaySettings"]) {
     };
     next.ui.theme = next.ui.theme ?? {
         primary: "#0ea5e9",
+        link: "#0ea5e9",
         background: "#ffffff",
         surface: "#ffffff",
         text: "#111827",
         muted: "#6b7280",
         radius: 16,
     };
+    next.ui.theme.link = next.ui.theme.link ?? next.ui.theme.primary ?? "#0ea5e9";
     next.ui.extraFields = Array.isArray(next.ui.extraFields) ? next.ui.extraFields : [];
 
     return next as NonNullable<DraftShape["gatewaySettings"]>;
@@ -255,6 +261,8 @@ export default function SupplierStep1Client({ customerSlug }: { customerSlug: st
     const theme = draft?.gatewaySettings?.ui?.theme ?? {};
     const branding = draft?.branding ?? {};
     const payButtonLabel = draft?.step1ButtonLabel?.trim() || "Pay Tender Fee";
+    const landingPageNote = draft?.landingPageNote?.trim() || "";
+    const landingPageSectionTitle = draft?.landingPageSectionTitle?.trim() || "Payment Required";
     const debugEnabled = Boolean(draft?.debugEnabled);
     const accentColor = branding.accentColor || theme.primary || "#0ea5e9";
     const surfaceStyle: React.CSSProperties = {
@@ -529,13 +537,21 @@ export default function SupplierStep1Client({ customerSlug }: { customerSlug: st
 
     return (
         <div
+            className="[&_input:focus-visible]:border-[var(--supplier-accent)] [&_input:focus-visible]:ring-[var(--supplier-accent)] [&_a]:text-[var(--supplier-link)]"
             style={{
                 background: theme.background,
                 color: theme.text,
                 borderRadius: theme.radius ?? 16,
+                ["--supplier-accent" as any]: accentColor,
+                ["--supplier-link" as any]: theme.link ?? accentColor,
             }}
         >
             <div className="mx-auto max-w-4xl space-y-6 p-6">
+                {debugEnabled ? (
+                    <div className="rounded-xl border px-3 py-2 text-xs font-mono" style={surfaceStyle}>
+                        DEBUG slug: <b>{customerSlug || "(empty)"}</b>
+                    </div>
+                ) : null}
                 {(branding.logoDataUrl || draft.customerName) && (
                     <div className="flex items-center gap-4 rounded-2xl border px-5 py-4" style={accentCardStyle}>
                         {branding.logoDataUrl ? (
@@ -546,7 +562,9 @@ export default function SupplierStep1Client({ customerSlug }: { customerSlug: st
                             />
                         ) : null}
                         <div className="min-w-0">
-                            <div className="text-lg font-semibold">{draft.customerName || customerSlug}</div>
+                            <div className="text-lg font-semibold" style={{ color: accentColor }}>
+                                {draft.customerName || customerSlug}
+                            </div>
                             {draft.customerNotes ? (
                                 <div className="mt-1 text-sm" style={mutedStyle}>
                                     {draft.customerNotes}
@@ -555,66 +573,19 @@ export default function SupplierStep1Client({ customerSlug }: { customerSlug: st
                         </div>
                     </div>
                 )}
-                <div className="space-y-1">
-                    <div className="text-2xl font-semibold">Landing Page</div>
-                    <div className="text-sm" style={mutedStyle}>
-                        Customer: <b>{customerSlug}</b>
+                {landingPageNote ? (
+                    <div className="rounded-2xl border p-4 text-sm" style={{ ...accentCardStyle, ...mutedStyle }}>
+                        {landingPageNote}
                     </div>
-                </div>
-
-                {/* Show query params for transparency */}
-                <Card className="rounded-2xl" style={accentCardStyle}>
-                            <CardHeader>
-                                <div className="font-semibold">Request Details</div>
-                                <div className="text-sm" style={mutedStyle}>
-                                    Values provided by the customer portal.
-                                </div>
-                            </CardHeader>
-
-                            <CardContent className="grid gap-3 sm:grid-cols-2">
-                                {queryParams.map((p) => (
-                                    <div key={p.id} className="rounded-xl border p-3" style={surfaceStyle}>
-                                        <div className="text-xs" style={mutedStyle}>{p.label || p.name}</div>
-                                        <div className="mt-1 text-sm font-medium">{valuesFromQuery[p.name] || "—"}</div>
-                                    </div>
-                                ))}
-                            </CardContent>
-                </Card>
-                {extraFields.length > 0 && (
-                    <Card className="rounded-2xl" style={accentCardStyle}>
-                                <CardHeader>
-                                    <div className="font-semibold">Additional Fields</div>
-                                    <div className="text-sm" style={mutedStyle}>
-                                        Added via Preview / AI Designer
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="grid gap-3 sm:grid-cols-2">
-                                    {extraFields.map((f: any) => (
-                                        <div key={f.key} className="space-y-1">
-                                            <div className="text-sm font-medium">
-                                                {f.label} {!f.required ? <span style={mutedStyle}>(optional)</span> : null}
-                                            </div>
-                                            <Input
-                                                className="rounded-xl"
-                                                required={Boolean(f.required)}
-                                                placeholder={f.placeholder ?? ""}
-                                                style={inputStyle}
-                                                value={formValues?.[f.key] ?? ""}
-                                                onChange={(e) =>
-                                                    setFormValues((prev: any) => ({ ...(prev ?? {}), [f.key]: e.target.value }))
-                                                }
-                                            />
-                                        </div>
-                                    ))}
-                                </CardContent>
-                    </Card>
-                )}
+                ) : null}
                 {/* Main output */}
                 <Card className="rounded-2xl" style={accentCardStyle}>
                             <CardHeader>
-                                <div className="font-semibold">Payment Required</div>
+                                <div className="font-semibold" style={{ color: accentColor }}>
+                                    {landingPageSectionTitle}
+                                </div>
                                 <div className="text-sm" style={mutedStyle}>
-                                    Fields below are rendered from the landing page API response using your mappings.
+                                    Review the details below and complete the required payment to continue.
                                 </div>
                             </CardHeader>
 
@@ -651,7 +622,6 @@ export default function SupplierStep1Client({ customerSlug }: { customerSlug: st
                                                                     target="_blank"
                                                                     rel="noreferrer"
                                                                     className="underline"
-                                                                    style={{ color: accentColor }}
                                                                 >
                                                                     {String(o.value)}
                                                                 </a>
@@ -668,6 +638,32 @@ export default function SupplierStep1Client({ customerSlug }: { customerSlug: st
                                                 ))}
                                             </div>
                                         )}
+                                        {extraFields.length > 0 ? (
+                                            <div className="space-y-3 pt-2">
+                                                <div className="font-medium" style={{ color: accentColor }}>
+                                                    Additional Fields
+                                                </div>
+                                                <div className="grid gap-3 sm:grid-cols-2">
+                                                    {extraFields.map((f: any) => (
+                                                        <div key={f.key} className="space-y-1">
+                                                            <div className="text-sm font-medium">
+                                                                {f.label} {!f.required ? <span style={mutedStyle}>(optional)</span> : null}
+                                                            </div>
+                                                            <Input
+                                                                className="rounded-xl"
+                                                                required={Boolean(f.required)}
+                                                                placeholder={f.placeholder ?? ""}
+                                                                style={inputStyle}
+                                                                value={formValues?.[f.key] ?? ""}
+                                                                onChange={(e) =>
+                                                                    setFormValues((prev: any) => ({ ...(prev ?? {}), [f.key]: e.target.value }))
+                                                                }
+                                                            />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ) : null}
                                         {isPreview ? (
                                             <div className="space-y-3 pt-2">
                                                 <div className="flex flex-wrap gap-2">
@@ -761,7 +757,9 @@ export default function SupplierStep1Client({ customerSlug }: { customerSlug: st
                 {formParams.length > 0 && (
                     <Card className="rounded-2xl" style={accentCardStyle}>
                                 <CardHeader>
-                                    <div className="font-semibold">Additional Inputs (optional)</div>
+                                    <div className="font-semibold" style={{ color: accentColor }}>
+                                        Additional Inputs (optional)
+                                    </div>
                                     <div className="text-sm" style={mutedStyle}>
                                         Currently not used for auto-call. We can enable supplier editing later.
                                     </div>

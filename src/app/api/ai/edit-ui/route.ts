@@ -41,7 +41,7 @@ Return ONLY valid JSON matching this schema:
 
 {
   "patch": {
-    "theme": { "primary": "#RRGGBB", "background": "#RRGGBB", "surface": "#RRGGBB", "text": "#RRGGBB", "muted": "#RRGGBB", "radius": 16 },
+    "theme": { "primary": "#RRGGBB", "link": "#RRGGBB", "background": "#RRGGBB", "surface": "#RRGGBB", "text": "#RRGGBB", "muted": "#RRGGBB", "radius": 16 },
     "addFields": [ { "key":"vat_number", "label":"VAT Number", "type":"text|number|email|date", "required": false, "placeholder":"..." } ],
     "removeFieldKeys": ["..."],
     "notes": "short note"
@@ -50,7 +50,7 @@ Return ONLY valid JSON matching this schema:
 
 Rules:
 - Keys must be lowercase snake_case.
-- If screenshot is provided, infer a reasonable primary/background/surface/text/muted palette consistent with it.
+- If screenshot is provided, infer a reasonable primary/link/background/surface/text/muted palette consistent with it.
 - Only include fields needed; omit sections you do not change.
 - Do not include markdown or commentary outside JSON.
 `;

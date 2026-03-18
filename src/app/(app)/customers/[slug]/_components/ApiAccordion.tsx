@@ -20,14 +20,6 @@ import {
 import { toast } from "sonner";
 
 import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
-
-import {
   DndContext,
   closestCenter,
   PointerSensor,
@@ -298,7 +290,7 @@ setTestingId(null);
         <div className="space-y-1">
           <div className="text-base font-semibold">{title}</div>
           <div className="text-sm text-muted-foreground">
-            Add endpoints, reorder them, toggle “Run in Step 1”, and test.
+            Add endpoints, reorder them, toggle “Run on Page Load”, and test.
           </div>
         </div>
         <Button onClick={addEndpoint} variant="outline" className="rounded-xl">
@@ -372,7 +364,7 @@ setTestingId(null);
                                   updateEndpoint(endpoint.id, { runInStep1: ev.target.checked })
                                 }
                               />
-                              Run in Step 1
+                              Run on Page Load
                             </label>
 
                             <Badge
@@ -442,21 +434,17 @@ setTestingId(null);
 
                           <div className="space-y-2">
                             <label className="text-sm font-medium">Auth</label>
-                            <Select
+                            <select
                               value={endpoint.authType}
-                              onValueChange={(v) =>
-                                updateEndpoint(endpoint.id, { authType: v as any })
+                              onChange={(ev) =>
+                                updateEndpoint(endpoint.id, { authType: ev.target.value as any })
                               }
+                              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
                             >
-                              <SelectTrigger className="rounded-xl">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="None">None</SelectItem>
-                                <SelectItem value="API Key">API Key</SelectItem>
-                                <SelectItem value="OAuth2">OAuth2</SelectItem>
-                              </SelectContent>
-                            </Select>
+                              <option value="None">None</option>
+                              <option value="API Key">API Key</option>
+                              <option value="OAuth2">OAuth2</option>
+                            </select>
                           </div>
 
                           {endpoint.authType === "API Key" && (
