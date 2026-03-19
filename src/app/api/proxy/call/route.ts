@@ -79,6 +79,11 @@ export async function POST(req: Request) {
       const tokenJson = tryJson(tokenText);
 
       if (!tokenResp.ok) {
+        const tokenErrorMessage =
+          tokenJson?.message ??
+          tokenJson?.error ??
+          (typeof tokenText === "string" ? tokenText.slice(0, 500) : "OAuth2 token failed");
+
         await logCall({
           customerSlug: meta?.customerSlug,
           phase: meta?.phase,
@@ -87,7 +92,7 @@ export async function POST(req: Request) {
           resolvedUrl: endpoint?.url ?? null,
           statusCode: tokenResp.status,
           ok: false,
-          errorMessage: "OAuth2 token failed",
+          errorMessage: `OAuth2 token failed: ${tokenErrorMessage}`,
           requestHeaders: headers,
           requestBody: endpoint?.requestBodyJson ?? null,
           responseBody: tokenText,
@@ -96,6 +101,13 @@ export async function POST(req: Request) {
           {
             error: "OAuth2 token failed",
             tokenStatus: tokenResp.status,
+            tokenUrl: tokenJson?.tokenUrl ?? null,
+            tokenOrigin: tokenJson?.origin ?? null,
+            tokenProtocol: tokenJson?.protocol ?? null,
+            tokenHost: tokenJson?.host ?? null,
+            tokenCode: tokenJson?.code ?? null,
+            tokenMessage: tokenJson?.message ?? null,
+            tokenCause: tokenJson?.cause ?? null,
             tokenBody: tokenJson ?? tokenText,
           },
           { status: 400 }
@@ -104,6 +116,11 @@ export async function POST(req: Request) {
 
       const accessToken = tokenJson?.token;
       if (!accessToken) {
+        const tokenErrorMessage =
+          tokenJson?.message ??
+          tokenJson?.error ??
+          (typeof tokenText === "string" ? tokenText.slice(0, 500) : "OAuth2 token missing access_token");
+
         await logCall({
           customerSlug: meta?.customerSlug,
           phase: meta?.phase,
@@ -112,13 +129,23 @@ export async function POST(req: Request) {
           resolvedUrl: endpoint?.url ?? null,
           statusCode: tokenResp.status,
           ok: false,
-          errorMessage: "OAuth2 token missing access_token",
+          errorMessage: `OAuth2 token missing access_token: ${tokenErrorMessage}`,
           requestHeaders: headers,
           requestBody: endpoint?.requestBodyJson ?? null,
           responseBody: tokenText,
         });
         return NextResponse.json(
-          { error: "OAuth2 token missing access_token", tokenBody: tokenJson ?? tokenText },
+          {
+            error: "OAuth2 token missing access_token",
+            tokenUrl: tokenJson?.tokenUrl ?? null,
+            tokenOrigin: tokenJson?.origin ?? null,
+            tokenProtocol: tokenJson?.protocol ?? null,
+            tokenHost: tokenJson?.host ?? null,
+            tokenCode: tokenJson?.code ?? null,
+            tokenMessage: tokenJson?.message ?? null,
+            tokenCause: tokenJson?.cause ?? null,
+            tokenBody: tokenJson ?? tokenText,
+          },
           { status: 400 }
         );
       }
