@@ -27,8 +27,7 @@ export async function POST(req: Request) {
     const r = await fetch(tokenUrl, {
       method: "POST",
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Accept": "application/json",
+        "Content-Type": "application/x-www-form-urlencoded"
       },
       body: form.toString(),
       redirect: "manual",
