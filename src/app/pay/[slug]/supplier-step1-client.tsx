@@ -409,12 +409,14 @@ export default function SupplierStep1Client({ customerSlug }: { customerSlug: st
 
             try {
                 const results: any[] = [];
-                const templateValues = {
-                    params: allParamValues,
-                    ...allParamValues,
-                };
 
                 for (const api of apis) {
+                    const templateValues = {
+                        params: allParamValues,
+                        results,
+                        ...allParamValues,
+                    };
+
                     const resolved: ApiEndpointConfig = {
                         ...api,
                         url: applyTemplate(api.url, templateValues),

@@ -191,12 +191,33 @@ function applyTemplateDot(input: string, values: any) {
       if (endpoint.headersJson?.trim()) JSON.parse(endpoint.headersJson);
       if (endpoint.method === "POST" && endpoint.requestBodyJson?.trim())
         JSON.parse(endpoint.requestBodyJson);
+
+      const endpointIndex = endpoints.findIndex((x) => x.id === endpoint.id);
+      const priorResults =
+        endpointIndex <= 0
+          ? []
+          : endpoints
+              .slice(0, endpointIndex)
+              .map((item) => {
+                if (!item.sampleResponseJson?.trim()) return null;
+                try {
+                  return JSON.parse(item.sampleResponseJson);
+                } catch {
+                  return null;
+                }
+              })
+              .filter(Boolean);
+
+      const resolvedTemplateValues = {
+        ...templateValues,
+        results: priorResults,
+      };
       
       const resolved = {
   ...endpoint,
-  url: applyTemplateDot(endpoint.url, templateValues),
-  headersJson: applyTemplateDot(endpoint.headersJson ?? "", templateValues),
-  requestBodyJson: applyTemplateDot(endpoint.requestBodyJson ?? "", templateValues),
+  url: applyTemplateDot(endpoint.url, resolvedTemplateValues),
+  headersJson: applyTemplateDot(endpoint.headersJson ?? "", resolvedTemplateValues),
+  requestBodyJson: applyTemplateDot(endpoint.requestBodyJson ?? "", resolvedTemplateValues),
 };
 
       const resp = await fetch("/api/proxy/call", {
@@ -594,7 +615,12 @@ setTestingId(null);
                             <Button
                               variant="outline"
                               className="rounded-xl"
-                              onClick={() => onSelectForMapper(endpoint.id)}
+                              onClick={() => {
+                                onSelectForMapper(endpoint.id);
+                                toast.success("Mapper source updated", {
+                                  description: `${endpoint.name || "Selected API"} response is now active in the mapper.`,
+                                });
+                              }}
                             >
                               Use response in mapper
                             </Button>

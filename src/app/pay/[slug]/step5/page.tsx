@@ -86,6 +86,24 @@ export default function Step5Page() {
         if (!sessRes.ok) throw new Error(sessJson?.error ?? "Session load failed");
         setSession(sessJson);
 
+        const sessionStatus = String(sessJson?.status ?? "").toUpperCase();
+
+        if (sessionStatus === "DENIED") {
+          setCombined({
+            params: {
+              slug,
+              sessionId,
+              rfxId: sessJson?.rfx_id ?? "",
+              accountId: sessJson?.account_id ?? "",
+              userId: sessJson?.user_id ?? "",
+            },
+            session: sessJson,
+            step1: sessJson?.metadata?.step1Mapped ?? {},
+            results: [],
+          });
+          return;
+        }
+
         // Run Step 5 APIs in sequence
         
         const apis = (cfg.step5Apis ?? []).filter((a: any) => a.runInStep1 ?? true);
