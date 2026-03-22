@@ -144,6 +144,7 @@ const [step5Notes, setStep5Notes] = React.useState<{ success: string; error: str
 const [step1ButtonLabel, setStep1ButtonLabel] = React.useState<string>("Pay Tender Fee");
 const [landingPageNote, setLandingPageNote] = React.useState<string>("");
 const [landingPageSectionTitle, setLandingPageSectionTitle] = React.useState<string>("Payment Required");
+const [allowedPortalUrl, setAllowedPortalUrl] = React.useState<string>("");
 
 const selectedStep5Api = React.useMemo(
   () => step5Apis.find((a) => a.id === selectedStep5ApiId) ?? step5Apis[0],
@@ -250,6 +251,7 @@ async function publishConfig() {
       customerSlug: targetSlug,
       customerName,
       customerNotes,
+      allowedPortalUrl,
       debugEnabled,
       branding,
       parameterRows,
@@ -359,6 +361,13 @@ const previewQueryString = React.useMemo(() => {
 
 const draftKey = React.useMemo(() => `pg-config-draft:${customer.slug}`, [customer.slug]);
 const [customerSlugInput, setCustomerSlugInput] = React.useState<string>(isNewCustomer ? "" : customer.slug);
+const credentialsSlug = normalizeSlug(customerSlugInput || customer.slug);
+const credentialsInfo = credentialsSlug
+  ? {
+      apiUsername: publishInfo?.apiUsername ?? credentialsSlug,
+      apiPassword: publishInfo?.apiPassword ?? null,
+    }
+  : null;
 const previewUrl = React.useMemo(
   () => `/pay/${customerSlugInput || customer.slug}?${previewQueryString}`,
   [customer.slug, customerSlugInput, previewQueryString]
@@ -455,6 +464,7 @@ React.useEffect(() => {
     if (typeof d.compactMode === "boolean") setCompactMode(d.compactMode);
     if (typeof d.customerName === "string") setCustomerName(d.customerName);
     if (typeof d.customerNotes === "string") setCustomerNotes(d.customerNotes);
+    if (typeof d.allowedPortalUrl === "string") setAllowedPortalUrl(d.allowedPortalUrl);
     if (typeof d.debugEnabled === "boolean") setDebugEnabled(d.debugEnabled);
     if (d.branding) setBranding({ ...getDefaultBranding(), ...d.branding });
     if (d.step5Apis) setStep5Apis(d.step5Apis);
@@ -533,6 +543,7 @@ function saveDraft(gatewaySettingsOverride?: any) {
       compactMode,
       savedAt: new Date().toISOString(),
       customerName,
+allowedPortalUrl,
 customerNotes,
 debugEnabled,
 branding,
@@ -572,10 +583,13 @@ function clearDraft() {
 async function resetCredentials() {
   setResettingCreds(true);
   try {
+    const targetSlug = normalizeSlug(customerSlugInput || customer.slug);
+    if (!targetSlug) throw new Error("Customer slug is required");
+
     const res = await fetch("/api/config/reset-credentials", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slug: customer.slug }),
+      body: JSON.stringify({ slug: targetSlug }),
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json?.error ?? "Reset failed");
@@ -663,6 +677,19 @@ const step1Prefixes = React.useMemo(() => {
   className="rounded-xl"
 />
             </div>
+            <div className="space-y-2 sm:col-span-2">
+              <label className="text-sm font-medium">Allowed portal URL</label>
+              <Input
+  value={allowedPortalUrl}
+  onChange={(e) => setAllowedPortalUrl(e.target.value)}
+  className="rounded-xl"
+  placeholder="https://customer.example.com"
+/>
+              <div className="text-xs text-muted-foreground">
+                Optional. If set, the supplier landing page will only load when opened from this customer portal URL.
+                Preview mode is still allowed.
+              </div>
+            </div>
             <div className="sm:col-span-2">
               <div className="flex items-center justify-between rounded-2xl border p-4">
                 <div className="space-y-1">
@@ -677,45 +704,6 @@ const step1Prefixes = React.useMemo(() => {
           </CardContent>
         </Card>
         
-        {publishInfo && (
-  <Card className="rounded-2xl">
-    <CardHeader>
-      <div className="font-semibold">External API Credentials</div>
-      <div className="text-sm text-muted-foreground">
-        Username identifies the customer. Password is shown only once.
-      </div>
-    </CardHeader>
-    <CardContent className="space-y-3">
-      <div className="rounded-xl border p-3">
-        <div className="text-xs text-muted-foreground">Username</div>
-        <div className="font-mono text-sm">{publishInfo.apiUsername}</div>
-      </div>
-
-      <div className="rounded-xl border p-3">
-        <div className="text-xs text-muted-foreground">Password</div>
-        <div className="text-sm">
-          {publishInfo.apiPassword ? (
-            <span className="font-mono">{publishInfo.apiPassword}</span>
-          ) : (
-            <span className="text-muted-foreground">
-              Not available (already created). Use “Reset password” to generate a new one.
-            </span>
-          )}
-        </div>
-      </div>
-      <Button
-  variant="outline"
-  className="rounded-xl"
-  disabled={resettingCreds}
-  onClick={resetCredentials}
->
-  {resettingCreds ? "Resetting…" : "Reset password"}
-</Button>
-      
-    </CardContent>
-  </Card>
-)}
-
         <Card className="rounded-2xl">
           <CardHeader>
             <div className="font-semibold">Branding (Optional)</div>
@@ -763,6 +751,45 @@ const step1Prefixes = React.useMemo(() => {
             </div>
           </CardContent>
         </Card>
+
+        {credentialsInfo && !isNewCustomer && (
+          <Card className="rounded-2xl">
+            <CardHeader>
+              <div className="font-semibold">External API Credentials</div>
+              <div className="text-sm text-muted-foreground">
+                Username identifies the customer. Password is shown only once.
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="rounded-xl border p-3">
+                <div className="text-xs text-muted-foreground">Username</div>
+                <div className="font-mono text-sm">{credentialsInfo.apiUsername}</div>
+              </div>
+
+              <div className="rounded-xl border p-3">
+                <div className="text-xs text-muted-foreground">Password</div>
+                <div className="text-sm">
+                  {credentialsInfo.apiPassword ? (
+                    <span className="font-mono">{credentialsInfo.apiPassword}</span>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      Not available (already created). Use “Reset password” to generate a new one.
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <Button
+                variant="outline"
+                className="rounded-xl"
+                disabled={resettingCreds}
+                onClick={resetCredentials}
+              >
+                {resettingCreds ? "Resetting…" : "Reset password"}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
       </TabsContent>
 
  <TabsContent value="params" className="mt-4 space-y-4">
