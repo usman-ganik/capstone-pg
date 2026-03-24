@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { getPool } from "@/lib/db";
 import { ensurePaymentSessionsSchema } from "@/lib/payment-sessions-schema";
 import crypto from "node:crypto";
+import {
+  buildFraudAssessment,
+  normalizeFraudSettings,
+  summarizeHistory,
+} from "@/lib/fraud-detection";
 
 export async function POST(req: Request) {
   try {
@@ -25,6 +30,9 @@ export async function POST(req: Request) {
 
     const publishedConfig = configRes.rows[0]?.config_json ?? {};
     const provider = String(publishedConfig?.gatewaySettings?.provider ?? "SIMULATOR").toUpperCase();
+    const fraudSettings = normalizeFraudSettings(
+      publishedConfig?.gatewaySettings?.fraudDetection
+    );
 
     const id = crypto.randomUUID();
     const now = new Date();
@@ -53,6 +61,29 @@ export async function POST(req: Request) {
       metadata,
     };
 
+    const historyRes = await pool.query(
+      `
+      SELECT amount, currency, status, supplier_name, supplier_email, created_at
+      FROM payment_sessions
+      WHERE customer_slug = $1
+      ORDER BY created_at DESC
+      LIMIT 200
+      `,
+      [customerSlug]
+    );
+    const historySummary = summarizeHistory(historyRes.rows, payload);
+    const fraudAssessment = buildFraudAssessment({
+      settings: fraudSettings,
+      session: payload,
+      behaviorMetrics: metadata?.behaviorMetrics,
+      historySummary,
+    });
+    const metadataWithFraud = {
+      ...metadata,
+      fraud: fraudAssessment,
+      fraudSettings,
+    };
+
     await pool.query(
       `INSERT INTO payment_sessions
        (id, customer_slug, rfx_id, rfx_number, account_id, user_id, supplier_name, supplier_email,
@@ -75,7 +106,7 @@ export async function POST(req: Request) {
         payload.received_number,
         payload.gateway_reference,
         payload.created_at,
-        JSON.stringify(metadata),
+        JSON.stringify(metadataWithFraud),
       ]
     );
 
@@ -83,6 +114,7 @@ export async function POST(req: Request) {
       sessionId: id,
       redirectUrl: `/pay/${customerSlug}/session/${id}`,
       provider,
+      fraud: fraudAssessment,
     });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? "Failed" }, { status: 500 });

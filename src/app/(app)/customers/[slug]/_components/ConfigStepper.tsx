@@ -31,6 +31,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { ApiEndpointConfig } from "@/lib/types";
 import ParameterBuilder, { ParameterRow, seed as parameterSeed } from "./ParameterBuilder";
+import { DEFAULT_FRAUD_SETTINGS, normalizeFraudSettings } from "@/lib/fraud-detection";
 type Customer = {
   name: string;
   slug: string;
@@ -163,12 +164,14 @@ const step5Prefixes = React.useMemo(() => {
 }, [step5Apis]);
 
 const [publishing, setPublishing] = React.useState(false);
+const [aiStatusReady, setAiStatusReady] = React.useState(false);
 
 const [gatewaySettings, setGatewaySettings] = React.useState<any>(() =>
   ensureGatewayUi({
     provider: "SIMULATOR",
     cybersource: { checkoutUrl: "", profileId: "", accessKey: "", secretKey: "" },
     paytabs: { profileId: "", serverKey: "", region: "" },
+    fraudDetection: DEFAULT_FRAUD_SETTINGS,
   })
 );
 
@@ -177,6 +180,7 @@ function ensureGatewayUi(gs: any) {
   next.provider = next.provider ?? "SIMULATOR";
   next.cybersource = next.cybersource ?? { checkoutUrl: "", profileId: "", accessKey: "", secretKey: "" };
   next.paytabs = next.paytabs ?? { profileId: "", serverKey: "", region: "" };
+  next.fraudDetection = normalizeFraudSettings(next.fraudDetection);
 
   // ✅ add missing ui
   next.ui = next.ui ?? {
@@ -450,6 +454,22 @@ React.useEffect(() => {
 }, [publisherName]);
 
 React.useEffect(() => {
+  if (typeof window === "undefined") return;
+
+  const syncAiStatus = () => {
+    const apiKey = window.localStorage.getItem("ai:apikey") || "";
+    setAiStatusReady(Boolean(apiKey.trim()));
+  };
+
+  syncAiStatus();
+  window.addEventListener("focus", syncAiStatus);
+
+  return () => {
+    window.removeEventListener("focus", syncAiStatus);
+  };
+}, []);
+
+React.useEffect(() => {
   function hydrateFromConfig(d: any) {
     if (!d || typeof d !== "object") return;
     if (typeof d.customerSlug === "string" && d.customerSlug.trim()) setCustomerSlugInput(d.customerSlug.trim());
@@ -700,6 +720,135 @@ const step1Prefixes = React.useMemo(() => {
                 </div>
                 <Switch checked={debugEnabled} onCheckedChange={setDebugEnabled} />
               </div>
+            </div>
+
+            <div className="sm:col-span-2 rounded-2xl border p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="text-sm font-medium">Fraud detection</div>
+                  <div className="text-xs text-muted-foreground">
+                    Customer-level risk screening for simulator payment sessions.
+                  </div>
+                </div>
+                <Switch
+                  checked={Boolean(gatewaySettings.fraudDetection?.enabled)}
+                  onCheckedChange={(checked) =>
+                    setGatewaySettings((prev: any) => ({
+                      ...prev,
+                      fraudDetection: normalizeFraudSettings({
+                        ...prev?.fraudDetection,
+                        enabled: checked,
+                      }),
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="mt-3 rounded-xl border bg-muted/30 p-3 text-xs text-muted-foreground">
+                AI status: {aiStatusReady ? "Ready" : "Not connected"}.
+                {" "}Live fraud summaries reuse the same provider and API key saved in AI Designer for this browser.
+              </div>
+
+              {gatewaySettings.fraudDetection?.enabled ? (
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Sensitivity</label>
+                    <Select
+                      value={gatewaySettings.fraudDetection.sensitivity}
+                      onValueChange={(value) =>
+                        setGatewaySettings((prev: any) => ({
+                          ...prev,
+                          fraudDetection: normalizeFraudSettings({
+                            ...prev?.fraudDetection,
+                            sensitivity: value,
+                          }),
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="rounded-xl">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="LOW">Low</SelectItem>
+                        <SelectItem value="MEDIUM">Medium</SelectItem>
+                        <SelectItem value="HIGH">High</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Fast-completion threshold (ms)</label>
+                    <Input
+                      className="rounded-xl"
+                      inputMode="numeric"
+                      value={String(gatewaySettings.fraudDetection.fastCompletionMs ?? "")}
+                      onChange={(e) =>
+                        setGatewaySettings((prev: any) => ({
+                          ...prev,
+                          fraudDetection: normalizeFraudSettings({
+                            ...prev?.fraudDetection,
+                            fastCompletionMs: e.target.value,
+                          }),
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Suspicious-completion threshold (ms)</label>
+                    <Input
+                      className="rounded-xl"
+                      inputMode="numeric"
+                      value={String(gatewaySettings.fraudDetection.suspiciousCompletionMs ?? "")}
+                      onChange={(e) =>
+                        setGatewaySettings((prev: any) => ({
+                          ...prev,
+                          fraudDetection: normalizeFraudSettings({
+                            ...prev?.fraudDetection,
+                            suspiciousCompletionMs: e.target.value,
+                          }),
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Review threshold</label>
+                    <Input
+                      className="rounded-xl"
+                      inputMode="numeric"
+                      value={String(gatewaySettings.fraudDetection.reviewThreshold ?? "")}
+                      onChange={(e) =>
+                        setGatewaySettings((prev: any) => ({
+                          ...prev,
+                          fraudDetection: normalizeFraudSettings({
+                            ...prev?.fraudDetection,
+                            reviewThreshold: e.target.value,
+                          }),
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Critical threshold</label>
+                    <Input
+                      className="rounded-xl"
+                      inputMode="numeric"
+                      value={String(gatewaySettings.fraudDetection.blockThreshold ?? "")}
+                      onChange={(e) =>
+                        setGatewaySettings((prev: any) => ({
+                          ...prev,
+                          fraudDetection: normalizeFraudSettings({
+                            ...prev?.fraudDetection,
+                            blockThreshold: e.target.value,
+                          }),
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+              ) : null}
             </div>
           </CardContent>
         </Card>
@@ -1075,10 +1224,11 @@ const step1Prefixes = React.useMemo(() => {
       )}
 
       {gatewaySettings.provider === "SIMULATOR" && (
-        <div className="space-y-3 rounded-xl border p-4">
+        <div className="space-y-4 rounded-xl border p-4">
           <div className="text-sm text-muted-foreground">
             Simulator mode shows approve and deny actions before redirecting to the result page.
           </div>
+
           <div className="flex flex-wrap gap-2">
             <Button className="rounded-xl" disabled>
               Approved

@@ -12,6 +12,7 @@ import type { MappingRow } from "@/app/(app)/customers/[slug]/_components/Respon
 import type { ParameterRow } from "@/app/(app)/customers/[slug]/_components/ParameterBuilder";
 
 import { useRouter } from "next/navigation";
+import { DEFAULT_FRAUD_SETTINGS, normalizeFraudSettings } from "@/lib/fraud-detection";
 
 type DraftShape = {
   customerName?: string;
@@ -42,6 +43,14 @@ type DraftShape = {
       profileId?: string;
       serverKey?: string;
       region?: string;
+    };
+    fraudDetection?: {
+      enabled?: boolean;
+      sensitivity?: "LOW" | "MEDIUM" | "HIGH";
+      fastCompletionMs?: number;
+      suspiciousCompletionMs?: number;
+      reviewThreshold?: number;
+      blockThreshold?: number;
     };
 
     ui?: {
@@ -218,6 +227,9 @@ function ensureGatewayUi(gatewaySettings?: DraftShape["gatewaySettings"]) {
         serverKey: "",
         region: "",
     };
+    next.fraudDetection = normalizeFraudSettings(
+        next.fraudDetection ?? DEFAULT_FRAUD_SETTINGS
+    );
     next.ui = next.ui ?? {
         theme: {
             primary: "#0ea5e9",

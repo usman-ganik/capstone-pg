@@ -188,6 +188,7 @@ export default async function PaymentsPage({
                   <TableHead>Amount</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Provider</TableHead>
+                  <TableHead>Fraud</TableHead>
                   <TableHead>Receipt</TableHead>
                   <TableHead>Session ID</TableHead>
                 </TableRow>
@@ -218,6 +219,11 @@ export default async function PaymentsPage({
                     <TableCell>{r.amount ?? "—"} {r.currency ?? ""}</TableCell>
                     <TableCell>{r.status}</TableCell>
                     <TableCell>{r.provider}</TableCell>
+                    <TableCell>
+                      {r.metadata?.fraud?.enabled
+                        ? `${r.metadata.fraud.label ?? "LOW"} (${r.metadata.fraud.score ?? 0})`
+                        : "Off"}
+                    </TableCell>
                     <TableCell className="font-mono text-xs">{r.received_number ?? "—"}</TableCell>
                     <TableCell className="font-mono text-xs">{r.id}</TableCell>
                     </>
@@ -225,7 +231,7 @@ export default async function PaymentsPage({
                 ))}
                 {rowsRes.rows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-sm text-muted-foreground">
+                    <TableCell colSpan={11} className="text-sm text-muted-foreground">
                       No results
                     </TableCell>
                   </TableRow>
