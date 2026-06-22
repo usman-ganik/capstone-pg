@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 function debugJsonPath(obj: any, path: string) {
   // Reuse your working debugJsonPath implementation here
@@ -47,6 +48,12 @@ function applyTemplateDot(input: string, values: any) {
 function isHttpUrl(value: unknown) {
   if (typeof value !== "string") return false;
   return /^https?:\/\//i.test(value.trim());
+}
+
+function fraudBadgeVariant(label?: string): "default" | "secondary" | "destructive" {
+  if (label === "HIGH" || label === "CRITICAL") return "destructive";
+  if (label === "MEDIUM") return "secondary";
+  return "default";
 }
 
 
@@ -195,6 +202,8 @@ export default function Step5Page() {
             value: debugJsonPath(combined, m.jsonPath).finalValue,
           }))
       : [];
+  const fraud = session?.metadata?.fraud;
+  const fraudEnabled = Boolean(session?.metadata?.fraudSettings?.enabled || fraud?.enabled);
 
   return (
     <div className="mx-auto max-w-4xl p-6 space-y-6">
@@ -216,9 +225,59 @@ export default function Step5Page() {
           ) : null}
 
           {!loading && !err && session && (
-            <div className="rounded-xl border p-4 text-sm">
-              Status: <b>{session.status}</b> • Provider: <b>{session.provider}</b>
-            </div>
+            <>
+              <div className="rounded-xl border p-4 text-sm">
+                Status: <b>{session.status}</b> • Provider: <b>{session.provider}</b>
+              </div>
+
+              {fraudEnabled ? (
+                <div className="rounded-xl border p-4 space-y-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="text-sm font-medium">Fraud summary</div>
+                    <Badge variant={fraudBadgeVariant(fraud?.label)} className="rounded-full">
+                      {fraud?.label ?? "LOW"}
+                    </Badge>
+                    <div className="text-sm text-muted-foreground">
+                      Score: <b>{fraud?.score ?? 0}</b>/100
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Recommendation: <b>{fraud?.recommendation ?? "APPROVE"}</b>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border bg-muted/30 p-3 text-sm">
+                    {fraud?.llm?.summary ?? fraud?.explanation ?? "No fraud summary available."}
+                  </div>
+
+                  {Array.isArray(fraud?.llm?.topReasons) && fraud.llm.topReasons.length > 0 ? (
+                    <div className="text-sm text-muted-foreground">
+                      {fraud.llm.topReasons.join(" • ")}
+                    </div>
+                  ) : null}
+
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-xl border p-3 text-sm">
+                      <div className="text-xs text-muted-foreground">Session ID</div>
+                      <div className="mt-1 font-mono text-xs">{sessionId}</div>
+                    </div>
+                    <div className="rounded-xl border p-3 text-sm">
+                      <div className="text-xs text-muted-foreground">Decision time</div>
+                      <div className="mt-1">
+                        {fraud?.behaviorMetrics?.pageLoadToDecisionMs != null
+                          ? `${fraud.behaviorMetrics.pageLoadToDecisionMs} ms`
+                          : "—"}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border p-3 text-sm">
+                      <div className="text-xs text-muted-foreground">Audit trail</div>
+                      <div className="mt-1 text-muted-foreground">
+                        Saved with the payment session and visible in reporting.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </>
           )}
 
           {!loading && !err && combined && (

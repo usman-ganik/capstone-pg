@@ -92,6 +92,11 @@ export async function GET(req: Request, { params }: { params: { slug: string } }
       const fraudSummary = fraud?.enabled
         ? `${fraud.label ?? "LOW"} (${fraud.score ?? 0})`
         : "Off";
+      const fraudNarrative =
+        fraud?.llm?.headline ??
+        fraud?.llm?.summary ??
+        fraud?.explanation ??
+        "—";
       return `
         <tr style="border-bottom:1px solid #eee">
           <td style="padding:8px">${created}</td>
@@ -105,7 +110,9 @@ export async function GET(req: Request, { params }: { params: { slug: string } }
           <td style="padding:8px">${r.status}</td>
           <td style="padding:8px">${r.provider}</td>
           <td style="padding:8px">${fraudSummary}</td>
+          <td style="padding:8px;max-width:320px">${fraudNarrative}</td>
           <td style="padding:8px">${r.received_number ?? "—"}</td>
+          <td style="padding:8px"><a href="/pay/${slug}/session/${r.id}">Open audit</a></td>
           <td style="padding:8px;font-family:monospace;font-size:12px">${r.id}</td>
         </tr>
       `;
@@ -162,12 +169,14 @@ export async function GET(req: Request, { params }: { params: { slug: string } }
           <th style="padding:8px">Status</th>
           <th style="padding:8px">Provider</th>
           <th style="padding:8px">Fraud</th>
+          <th style="padding:8px">Fraud Summary</th>
           <th style="padding:8px">Receipt</th>
+          <th style="padding:8px">Audit</th>
           <th style="padding:8px">Session</th>
         </tr>
       </thead>
       <tbody>
-        ${rowsHtml || `<tr><td colspan="10" style="padding:12px;opacity:.7">No results</td></tr>`}
+        ${rowsHtml || `<tr><td colspan="12" style="padding:12px;opacity:.7">No results</td></tr>`}
       </tbody>
     </table>
   </div>

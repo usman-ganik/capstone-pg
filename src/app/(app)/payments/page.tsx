@@ -189,7 +189,9 @@ export default async function PaymentsPage({
                   <TableHead>Status</TableHead>
                   <TableHead>Provider</TableHead>
                   <TableHead>Fraud</TableHead>
+                  <TableHead>Fraud Summary</TableHead>
                   <TableHead>Receipt</TableHead>
+                  <TableHead>Audit</TableHead>
                   <TableHead>Session ID</TableHead>
                 </TableRow>
               </TableHeader>
@@ -224,14 +226,30 @@ export default async function PaymentsPage({
                         ? `${r.metadata.fraud.label ?? "LOW"} (${r.metadata.fraud.score ?? 0})`
                         : "Off"}
                     </TableCell>
+                    <TableCell className="max-w-[280px]">
+                      <div className="text-sm">
+                        {r.metadata?.fraud?.llm?.headline ??
+                          r.metadata?.fraud?.llm?.summary ??
+                          r.metadata?.fraud?.explanation ??
+                          "—"}
+                      </div>
+                    </TableCell>
                     <TableCell className="font-mono text-xs">{r.received_number ?? "—"}</TableCell>
+                    <TableCell>
+                      <a
+                        href={`/pay/${r.customer_slug}/session/${r.id}`}
+                        className="text-sm underline"
+                      >
+                        Open audit
+                      </a>
+                    </TableCell>
                     <TableCell className="font-mono text-xs">{r.id}</TableCell>
                     </>
                   </TableRow>
                 ))}
                 {rowsRes.rows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-sm text-muted-foreground">
+                    <TableCell colSpan={13} className="text-sm text-muted-foreground">
                       No results
                     </TableCell>
                   </TableRow>
