@@ -7,12 +7,28 @@ export async function POST(req: Request) {
     const tokenUrl: string = body.oauthTokenUrl || body.tokenUrl;
     const clientId: string = body.oauthClientId || body.clientId;
     const clientSecret: string = body.oauthClientSecret || body.clientSecret;
-    const grantType: string = body.oauthGrantType || body.grant_type || "client_credentials";
+    const grantTypeRaw: string = (body.oauthGrantType || body.grant_type || "client_credentials").trim();
+    const grantType: string = grantTypeRaw || "client_credentials";
     const scope: string | undefined = body.oauthScope || body.scope;
+    const audience: string | undefined = body.oauthAudience;
+    const username: string | undefined = body.oauthUsername;
+    const userPassword: string | undefined = body.oauthPassword;
+    const refreshToken: string | undefined = body.oauthRefreshToken;
+    const authCode: string | undefined = body.oauthCode;
+    const redirectUri: string | undefined = body.oauthRedirectUri;
 
-    if (!tokenUrl || !clientId || !clientSecret) {
+    // client_credentials strictly requires id + secret. Other grants tolerate
+    // missing credentials (some providers authenticate out-of-band), so we only
+    // hard-block on the missing piece that's impossible without it.
+    if (!tokenUrl) {
       return NextResponse.json(
-        { error: "Missing oauthTokenUrl/clientId/clientSecret" },
+        { error: "Missing oauthTokenUrl" },
+        { status: 400 }
+      );
+    }
+    if (grantType === "client_credentials" && (!clientId || !clientSecret)) {
+      return NextResponse.json(
+        { error: "Missing clientId/clientSecret for client_credentials grant" },
         { status: 400 }
       );
     }
@@ -41,9 +57,19 @@ export async function POST(req: Request) {
     // OAuth2 token endpoints typically expect x-www-form-urlencoded
     const form = new URLSearchParams();
     form.set("grant_type", grantType);
-    form.set("client_id", clientId);
-    form.set("client_secret", clientSecret);
+    if (clientId) form.set("client_id", clientId);
+    if (clientSecret) form.set("client_secret", clientSecret);
     if (scope) form.set("scope", scope);
+    if (audience) form.set("audience", audience);
+    if (grantType === "password" && (username || userPassword)) {
+      if (username) form.set("username", username);
+      if (userPassword) form.set("password", userPassword);
+    }
+    if (grantType === "authorization_code" && authCode) {
+      form.set("code", authCode);
+      if (redirectUri) form.set("redirect_uri", redirectUri);
+    }
+    if (grantType === "refresh_token" && refreshToken) form.set("refresh_token", refreshToken);
 
     let r: Response;
     try {
@@ -107,8 +133,9 @@ export async function POST(req: Request) {
       );
     }
 
-    // Expecting access_token
-    if (!payload?.token) {
+    // Expecting access_token (also accept a `token` alias some gateways use)
+    const accessToken = payload?.access_token ?? payload?.token;
+    if (!accessToken) {
       return NextResponse.json(
         {
           error: "No access_token in response",
@@ -122,7 +149,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({
-      token: payload.token,
+      token: accessToken,
       token_type: payload.token_type ?? "Bearer",
       expires_in: payload.expires_in,
       tokenUrl,

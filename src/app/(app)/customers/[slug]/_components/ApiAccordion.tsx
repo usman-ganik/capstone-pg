@@ -509,6 +509,23 @@ setTestingId(null);
                                 />
                               </div>
                               <div className="space-y-2">
+                                <label className="text-sm font-medium">Grant Type</label>
+                                <select
+                                  value={endpoint.oauthGrantType ?? "client_credentials"}
+                                  onChange={(ev) =>
+                                    updateEndpoint(endpoint.id, {
+                                      oauthGrantType: ev.target.value as any,
+                                    })
+                                  }
+                                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                                >
+                                  <option value="client_credentials">client_credentials</option>
+                                  <option value="password">password</option>
+                                  <option value="authorization_code">authorization_code</option>
+                                  <option value="refresh_token">refresh_token</option>
+                                </select>
+                              </div>
+                              <div className="space-y-2">
                                 <label className="text-sm font-medium">Client ID</label>
                                 <Input
                                   value={endpoint.oauthClientId ?? ""}
@@ -558,6 +575,82 @@ setTestingId(null);
                                     )}
                                   </button>
                                 </div>
+                              </div>
+
+                              {endpoint.oauthGrantType === "password" && (
+                                <>
+                                  <div className="space-y-2">
+                                    <label className="text-sm font-medium">Username</label>
+                                    <Input
+                                      value={endpoint.oauthUsername ?? ""}
+                                      onChange={(ev) =>
+                                        updateEndpoint(endpoint.id, { oauthUsername: ev.target.value })
+                                      }
+                                      className="rounded-xl"
+                                    />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <label className="text-sm font-medium">Password</label>
+                                    <Input
+                                      type="password"
+                                      value={endpoint.oauthPassword ?? ""}
+                                      onChange={(ev) =>
+                                        updateEndpoint(endpoint.id, { oauthPassword: ev.target.value })
+                                      }
+                                      className="rounded-xl"
+                                    />
+                                  </div>
+                                </>
+                              )}
+
+                              {endpoint.oauthGrantType === "authorization_code" && (
+                                <>
+                                  <div className="space-y-2">
+                                    <label className="text-sm font-medium">Auth Code</label>
+                                    <Input
+                                      value={endpoint.oauthCode ?? ""}
+                                      onChange={(ev) =>
+                                        updateEndpoint(endpoint.id, { oauthCode: ev.target.value })
+                                      }
+                                      className="rounded-xl"
+                                    />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <label className="text-sm font-medium">Redirect URI</label>
+                                    <Input
+                                      value={endpoint.oauthRedirectUri ?? ""}
+                                      onChange={(ev) =>
+                                        updateEndpoint(endpoint.id, { oauthRedirectUri: ev.target.value })
+                                      }
+                                      className="rounded-xl"
+                                    />
+                                  </div>
+                                </>
+                              )}
+
+                              {endpoint.oauthGrantType === "refresh_token" && (
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium">Refresh Token</label>
+                                  <Input
+                                    value={endpoint.oauthRefreshToken ?? ""}
+                                    onChange={(ev) =>
+                                      updateEndpoint(endpoint.id, { oauthRefreshToken: ev.target.value })
+                                    }
+                                    className="rounded-xl"
+                                  />
+                                </div>
+                              )}
+
+                              <div className="space-y-2">
+                                <label className="text-sm font-medium">Scope (optional)</label>
+                                <Input
+                                  value={endpoint.oauthScope ?? ""}
+                                  onChange={(ev) =>
+                                    updateEndpoint(endpoint.id, { oauthScope: ev.target.value })
+                                  }
+                                  placeholder="e.g. read write"
+                                  className="rounded-xl"
+                                />
                               </div>
                             </>
                           )}
